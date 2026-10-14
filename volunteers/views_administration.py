@@ -131,3 +131,21 @@ def branding_update(request):
         messages.success(request, "Le logo est maintenant visible sur toutes les pages.")
         return redirect("administration_dashboard")
     return render(request, "administration/logo_form.html", {"form": form})
+
+
+class AssociationPaymentForm(forms.ModelForm):
+    class Meta:
+        model = SiteBranding
+        fields = ("sumup_payment_url",)
+        labels = {"sumup_payment_url": "Lien SumUp de l’association"}
+
+
+@administrator_required
+def payment_settings(request):
+    config, _ = SiteBranding.objects.get_or_create(pk=1)
+    form = AssociationPaymentForm(request.POST or None, instance=config)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Le lien de règlement de l’association a été enregistré.")
+        return redirect("administration_dashboard")
+    return render(request, "administration/payment_settings.html", {"form": form})

@@ -1,8 +1,27 @@
 from django.urls import path
 
-from . import views, views_administration, views_family, views_organizer, views_public
+from . import (
+    views,
+    views_administration,
+    views_catalogue,
+    views_family,
+    views_organizer,
+    views_profiles,
+    views_public,
+)
 
 urlpatterns = [
+    path("organisateur/inscriptions/<uuid:registration_id>/restauration/", views_organizer.meal_order_create, name="meal_order_create"),
+    path("administration/reglement/", views_administration.payment_settings, name="payment_settings"),
+    path("organisateur/profils-evenement/", views_profiles.event_profile_list, name="event_profile_list"),
+    path("organisateur/evenements/<uuid:event_id>/profil/", views_profiles.event_profile_save, name="event_profile_save"),
+    path("organisateur/profils-evenement/<uuid:profile_id>/creer/", views_profiles.event_profile_create, name="event_profile_create"),
+    path("organisateur/evenements/<uuid:event_id>/import/<str:kind>/", views_catalogue.catalogue_import, name="catalogue_import"),
+    path("organisateur/catalogues/<str:kind>/modele.csv", views_catalogue.catalogue_template, name="catalogue_template"),
+    path("organisateur/evenements/<uuid:event_id>/recapitulatif-postes/", views_catalogue.recap_assignments, name="recap_assignments"),
+    path("organisateur/evenements/<uuid:event_id>/recapitulatif-postes.csv", views_catalogue.recap_assignments_csv, name="recap_assignments_csv"),
+    path("organisateur/evenements/<uuid:event_id>/recapitulatif-repas/", views_catalogue.recap_meals, name="recap_meals"),
+    path("organisateur/evenements/<uuid:event_id>/recapitulatif-repas.csv", views_catalogue.recap_meals_csv, name="recap_meals_csv"),
     path("organisateur/menus/<uuid:menu_id>/modifier/", views_organizer.menu_update, name="menu_update"),
     path("organisateur/boissons/<uuid:beverage_id>/modifier/", views_organizer.beverage_update, name="beverage_update"),
     path("administration/", views_administration.administration_dashboard, name="administration_dashboard"),

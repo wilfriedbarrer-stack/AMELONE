@@ -120,7 +120,7 @@ def _cancel_incompatible_assignments(
 
     active_statuses = (Assignment.Status.DRAFT, Assignment.Status.CONFIRMED)
     assignments = list(
-        Assignment.objects.select_for_update()
+        Assignment.objects.select_for_update(of=("self",))
         .filter(registration=registration, status__in=active_statuses)
         .select_related("station_slot__station")
         .order_by("created_at")
@@ -181,8 +181,8 @@ def save_registration(
     """
 
     organizer = _is_organizer(actor, explicit=actor_is_organizer)
-    locked_member = Member.objects.select_for_update().select_related("family").get(pk=member.pk)
-    locked_day = EventDay.objects.select_related("event").get(pk=event_day.pk)
+    locked_member = Member.objects.select_for_update(of=("self",)).select_related("family").get(pk=member.pk)
+    locked_day = EventDay.objects.select_for_update(of=("self",)).select_related("event").get(pk=event_day.pk)
     _check_member_access(actor, locked_member, organizer=organizer)
     _check_registration_window(locked_day.event, organizer=organizer)
     if locked_member.is_archived:
@@ -192,7 +192,7 @@ def save_registration(
     _validate_preferred_station(locked_day, preferred_station)
 
     registration = (
-        Registration.objects.select_for_update()
+        Registration.objects.select_for_update(of=("self",))
         .filter(member=locked_member, event_day=locked_day)
         .first()
     )
@@ -236,7 +236,7 @@ def cancel_registration(
 
     organizer = _is_organizer(actor, explicit=actor_is_organizer)
     locked = (
-        Registration.objects.select_for_update()
+        Registration.objects.select_for_update(of=("self",))
         .select_related("member__family", "event_day__event")
         .get(pk=registration.pk)
     )
@@ -283,12 +283,12 @@ def create_assignment(
 
     _check_organizer_access(actor)
     locked_registration = (
-        Registration.objects.select_for_update()
+        Registration.objects.select_for_update(of=("self",))
         .select_related("event_day", "member")
         .get(pk=registration.pk)
     )
     locked_slot = (
-        StationSlot.objects.select_for_update()
+        StationSlot.objects.select_for_update(of=("self",))
         .select_related("station", "event_day")
         .get(pk=station_slot.pk)
     )
@@ -304,7 +304,7 @@ def create_assignment(
         raise _business_error(exc, code="invalid_assignment") from exc
     except IntegrityError as exc:
         raise BusinessRuleError(
-            "Cette personne possède déjà une affectation sur cette demi-journée.",
+            "Cette personne possède déjà une affectation sur cette période.",
             code="duplicate_assignment",
         ) from exc
     return assignment
@@ -325,14 +325,14 @@ def update_assignment(
     )
     # Même ordre de verrouillage que create/confirm et que la modification d'une
     # inscription : inscription, créneau, puis affectation.
-    Registration.objects.select_for_update().get(pk=registration_id)
+    Registration.objects.select_for_update(of=("self",)).get(pk=registration_id)
     destination = (
-        StationSlot.objects.select_for_update()
+        StationSlot.objects.select_for_update(of=("self",))
         .select_related("station", "event_day")
         .get(pk=station_slot.pk)
     )
     locked = (
-        Assignment.objects.select_for_update()
+        Assignment.objects.select_for_update(of=("self",))
         .select_related("registration__event_day", "station_slot")
         .get(pk=assignment.pk)
     )
@@ -367,8 +367,8 @@ def remove_assignment(
     registration_id = Assignment.objects.values_list("registration_id", flat=True).get(
         pk=assignment.pk
     )
-    Registration.objects.select_for_update().get(pk=registration_id)
-    locked = Assignment.objects.select_for_update().get(pk=assignment.pk)
+    Registration.objects.select_for_update(of=("self",)).get(pk=registration_id)
+    locked = Assignment.objects.select_for_update(of=("self",)).get(pk=assignment.pk)
     if locked.status == Assignment.Status.CANCELLED:
         return locked
     locked.status = Assignment.Status.CANCELLED
@@ -422,13 +422,13 @@ def confirm_assignments(
         )
     registration_ids = {registration_id for _, registration_id in preflight}
     # Ordre identique aux créations et modifications concurrentes.
-    list(Registration.objects.select_for_update().filter(pk__in=registration_ids).order_by("pk"))
+    list(Registration.objects.select_for_update(of=("self",)).filter(pk__in=registration_ids).order_by("pk"))
     slot_ids = set(
         Assignment.objects.filter(pk__in=ids).values_list("station_slot_id", flat=True)
     )
-    list(StationSlot.objects.select_for_update().filter(pk__in=slot_ids).order_by("pk"))
+    list(StationSlot.objects.select_for_update(of=("self",)).filter(pk__in=slot_ids).order_by("pk"))
     locked = list(
-        Assignment.objects.select_for_update()
+        Assignment.objects.select_for_update(of=("self",))
         .filter(pk__in=ids)
         .select_related("registration", "station_slot__station")
         .order_by("created_at")
@@ -470,6 +470,7 @@ def save_meal_order(
     beverage: Beverage | None = None,
     drink: Beverage | None = None,
     no_meal: bool = False,
+    payment_method: str | None = None,
     actor=None,
     actor_is_organizer: bool = False,
 ) -> MealOrder:
@@ -483,7 +484,7 @@ def save_meal_order(
     # ``drink`` est l'alias historique utilisé par les premières vues.
     beverage = beverage or drink
     locked_registration = (
-        Registration.objects.select_for_update()
+        Registration.objects.select_for_update(of=("self",))
         .select_related("member__family", "event_day__event")
         .get(pk=registration.pk)
     )
@@ -494,6 +495,14 @@ def save_meal_order(
             "Un repas ne peut être réservé que pour une inscription active.",
             code="inactive_registration",
         )
+    order = MealOrder.objects.select_for_update(of=("self",)).filter(registration=locked_registration).first()
+    try:
+        if menu is not None:
+            menu = Menu.objects.select_for_update(of=("self",)).get(pk=menu.pk)
+        if beverage is not None:
+            beverage = Beverage.objects.select_for_update(of=("self",)).get(pk=beverage.pk)
+    except (Menu.DoesNotExist, Beverage.DoesNotExist) as error:
+        raise BusinessRuleError("Cette option de restauration n’est plus disponible. Choisissez à nouveau.", code="removed_meal_option") from error
     if no_meal and (menu is not None or beverage is not None):
         raise BusinessRuleError(
             "Un choix « pas de repas » ne peut contenir ni menu ni boisson.",
@@ -511,17 +520,27 @@ def save_meal_order(
                 f"Cette {label} n'appartient pas à la journée d'inscription.",
                 code="wrong_meal_day",
             )
-        if not option.is_active:
+        preserved = order is not None and option.pk == (
+            order.menu_id if label == "menu" else order.beverage_id
+        )
+        if not option.is_active and not preserved:
             raise BusinessRuleError(
                 f"Cette {label} n'est plus proposée.", code="inactive_meal_option"
             )
 
-    order = MealOrder.objects.select_for_update().filter(registration=locked_registration).first()
     if order is None:
         order = MealOrder(registration=locked_registration)
+    if order.legacy_availability == "legacy":
+        order.legacy_availability = locked_registration.availability
+    if order.menu_id != (menu.pk if menu is not None and not no_meal else None) or (order.legacy_availability and order.legacy_availability != locked_registration.availability):
+        order.legacy_availability = ""
     order.wants_meal = not no_meal
     order.menu = None if no_meal else menu
     order.beverage = None if no_meal else beverage
+    if payment_method is not None:
+        if payment_method not in MealOrder.PaymentMethod.values:
+            raise BusinessRuleError("Le mode de paiement souhaité est invalide.", code="invalid_payment_method")
+        order.payment_method = payment_method
     order.corrected_by = actor if organizer and getattr(actor, "is_authenticated", False) else None
     try:
         # MealOrder.save() réalise le snapshot uniquement si le choix change.
@@ -606,7 +625,7 @@ def record_payment(
         )
     if method not in Payment.Method.values:
         raise BusinessRuleError("Le mode de paiement est invalide.", code="invalid_payment_method")
-    locked_family = Family.objects.select_for_update().get(pk=family.pk)
+    locked_family = Family.objects.select_for_update(of=("self",)).get(pk=family.pk)
     locked_event = Event.objects.get(pk=event.pk)
     payment = Payment(
         family=locked_family,
@@ -784,7 +803,7 @@ def prepare_assignment_delivery(
     """Fige un message prêt à envoyer; retourne None si rien n'a changé."""
 
     _check_organizer_access(actor)
-    locked_family = Family.objects.select_for_update().select_related("account").get(pk=family.pk)
+    locked_family = Family.objects.select_for_update(of=("self",)).select_related("account").get(pk=family.pk)
     preview = build_assignment_email_preview(
         event=event, family=locked_family, extra_instructions=extra_instructions
     )
@@ -824,7 +843,7 @@ def send_assignment_delivery(*, delivery: EmailDelivery, actor=None) -> EmailDel
 
     _check_organizer_access(actor)
     locked = (
-        EmailDelivery.objects.select_for_update()
+        EmailDelivery.objects.select_for_update(of=("self",))
         .select_related("event", "family__account")
         .get(pk=delivery.pk)
     )

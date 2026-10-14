@@ -215,6 +215,22 @@ class Event(UUIDTimeStampedModel):
         return self.name
 
 
+class EventProfile(UUIDTimeStampedModel):
+    """Configuration réutilisable, sans inscriptions ni données personnelles."""
+
+    name = models.CharField(_("nom du profil"), max_length=200, unique=True)
+    description = models.TextField(_("description du profil"), blank=True)
+    snapshot = models.JSONField(_("configuration"), default=dict, editable=False)
+
+    class Meta:
+        verbose_name = _("profil d'événement")
+        verbose_name_plural = _("profils d'événement")
+        ordering = ("name",)
+
+    def __str__(self):
+        return self.name
+
+
 class EventDay(UUIDTimeStampedModel):
     event = models.ForeignKey(
         Event,
@@ -272,6 +288,7 @@ class StationSlot(UUIDTimeStampedModel):
     class Period(models.TextChoices):
         MORNING = "morning", _("Matin")
         AFTERNOON = "afternoon", _("Après-midi")
+        FULL_DAY = "full_day", _("Journée")
 
     station = models.ForeignKey(
         Station,
@@ -321,6 +338,22 @@ class StationSlot(UUIDTimeStampedModel):
             errors["end_time"] = _("Renseignez les deux horaires ou laissez-les tous les deux vides.")
         elif self.start_time and self.end_time and self.start_time >= self.end_time:
             errors["end_time"] = _("L'heure de fin doit suivre l'heure de début.")
+        original = StationSlot.objects.filter(pk=self.pk).values(
+            "station_id", "event_day_id", "period"
+        ).first()
+        if original and self.assignments.filter(
+            status__in=(Assignment.Status.DRAFT, Assignment.Status.CONFIRMED)
+        ).exists():
+            # Changer ces champs laisserait les affectations existantes hors
+            # disponibilité ou en conflit, avec une période dénormalisée périmée.
+            for field, message in (
+                ("station", _("Retirez les affectations actives avant de changer de poste.")),
+                ("event_day", _("Retirez les affectations actives avant de changer la date du créneau.")),
+                ("period", _("Retirez les affectations actives avant de changer cette période.")),
+            ):
+                attribute = field if field == "period" else f"{field}_id"
+                if getattr(self, attribute) != original[attribute]:
+                    errors[field] = message
         if errors:
             raise ValidationError(errors)
 
@@ -334,6 +367,10 @@ class StationSlot(UUIDTimeStampedModel):
     def overlaps(self, other: "StationSlot") -> bool:
         if self.event_day_id != other.event_day_id:
             return False
+        # Une affectation à la journée mobilise la personne sur les deux
+        # demi-journées, même si les horaires indicatifs ne se chevauchent pas.
+        if self.Period.FULL_DAY in (self.period, other.period):
+            return True
         if self.start_time and self.end_time and other.start_time and other.end_time:
             return self.start_time < other.end_time and other.start_time < self.end_time
         return self.period == other.period
@@ -440,7 +477,9 @@ class Assignment(UUIDTimeStampedModel):
         on_delete=models.PROTECT,
         related_name="assignments",
     )
-    # Dénormalisé pour garantir en base une seule affectation par demi-journée.
+    # Dénormalisé pour garantir en base une seule affectation par période.
+    # Les chevauchements journée/demi-journée sont contrôlés sous le verrou de
+    # l'inscription dans les services d'affectation.
     period = models.CharField(
         _("période"), max_length=16, choices=StationSlot.Period.choices, editable=False
     )
@@ -503,7 +542,7 @@ class Assignment(UUIDTimeStampedModel):
                 registration=registration, status__in=active_statuses
             ).exclude(pk=self.pk)
             if others.filter(period=slot.period).exists():
-                errors["station_slot"] = _("Cette personne est déjà affectée sur cette demi-journée.")
+                errors["station_slot"] = _("Cette personne est déjà affectée sur cette période.")
             for other in others.select_related("station_slot"):
                 if slot.overlaps(other.station_slot):
                     errors["station_slot"] = _("Ce créneau chevauche une autre affectation.")
@@ -570,9 +609,29 @@ class PricedOption(UUIDTimeStampedModel):
 
 
 class Menu(PricedOption):
+    class MealType(models.TextChoices):
+        FULL_MEAL = "full_meal", _("Repas complet — journée")
+        SNACK = "snack", _("Collation — demi-journée")
+
+    meal_type = models.CharField(
+        _("type de repas"), max_length=16, choices=MealType.choices, default=MealType.FULL_MEAL, db_default=MealType.FULL_MEAL
+    )
     event_day = models.ForeignKey(
         EventDay, on_delete=models.CASCADE, related_name="menus", verbose_name=_("journée")
     )
+
+    def clean(self):
+        super().clean()
+        previous = Menu.objects.filter(pk=self.pk).only("meal_type").first()
+        if previous and previous.meal_type != self.meal_type:
+            orders = self.orders.filter(wants_meal=True, registration__status=Registration.Status.ACTIVE)
+            incompatible = (
+                orders.exclude(registration__availability=Registration.Availability.FULL_DAY)
+                if self.meal_type == self.MealType.FULL_MEAL
+                else orders.filter(registration__availability=Registration.Availability.FULL_DAY)
+            )
+            if incompatible.exists():
+                raise ValidationError({"meal_type": _("Ce changement rendrait des réservations incompatibles. Créez un autre menu ou corrigez d’abord les réservations.")})
 
     class Meta(PricedOption.Meta):
         verbose_name = _("menu")
@@ -596,6 +655,15 @@ class Beverage(PricedOption):
 
 
 class MealOrder(UUIDTimeStampedModel):
+    class PaymentMethod(models.TextChoices):
+        COUNTER = "counter", _("Paiement au comptoir")
+        SUMUP = "sumup", _("Paiement via lien SumUp")
+
+    payment_method = models.CharField(
+        _("mode de paiement souhaité"), max_length=16,
+        choices=PaymentMethod.choices, default=PaymentMethod.COUNTER, db_default=PaymentMethod.COUNTER,
+    )
+    legacy_availability = models.CharField(max_length=16, blank=True, default="", db_default="legacy", editable=False)
     registration = models.OneToOneField(
         Registration,
         verbose_name=_("inscription"),
@@ -658,6 +726,10 @@ class MealOrder(UUIDTimeStampedModel):
             ),
         ]
 
+    @property
+    def legacy_choice_availability(self):
+        return self.registration.availability if self.legacy_availability == "legacy" else self.legacy_availability
+
     def clean(self):
         super().clean()
         errors = {}
@@ -671,6 +743,21 @@ class MealOrder(UUIDTimeStampedModel):
                 errors["menu"] = _("Le menu doit appartenir à la journée d'inscription.")
             if self.beverage_id and self.beverage.event_day_id != event_day_id:
                 errors["beverage"] = _("La boisson doit appartenir à la journée d'inscription.")
+            if self.menu_id:
+                expected = (
+                    Menu.MealType.FULL_MEAL
+                    if self.registration.availability == Registration.Availability.FULL_DAY
+                    else Menu.MealType.SNACK
+                )
+                if self.menu.meal_type != expected:
+                    previous = MealOrder.objects.filter(pk=self.pk).only("menu_id", "legacy_availability").first()
+                    preserved = (
+                        previous is not None and previous.menu_id == self.menu_id
+                        and previous.legacy_availability in (self.registration.availability, "legacy")
+                        and self.legacy_availability in (previous.legacy_availability, self.registration.availability)
+                    )
+                    if not preserved:
+                        errors["menu"] = _("Une journée donne accès à un repas complet ; une demi-journée à une collation.")
         if errors:
             raise ValidationError(errors)
 
@@ -972,3 +1059,4 @@ class SiteBranding(models.Model):
     """Le logo est conservé en base pour survivre aux redéploiements Render."""
 
     logo_data = models.TextField(blank=True)
+    sumup_payment_url = models.URLField(_("lien SumUp de l’association"), blank=True, db_default="")

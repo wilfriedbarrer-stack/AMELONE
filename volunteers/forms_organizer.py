@@ -45,6 +45,11 @@ class OrganizerFormMixin:
 
 
 class EventForm(OrganizerFormMixin, forms.ModelForm):
+    event_date = forms.DateField(
+        label="Date de l'événement",
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+    )
+
     class Meta:
         model = Event
         fields = (
@@ -54,7 +59,6 @@ class EventForm(OrganizerFormMixin, forms.ModelForm):
             "registration_opens_at",
             "registration_closes_at",
             "meal_orders_close_at",
-            "sumup_payment_url",
             "general_instructions",
             "status",
         )
@@ -74,12 +78,35 @@ class EventForm(OrganizerFormMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.event_day = (
+            self.instance.days.order_by("date").first()
+            if not self.instance._state.adding else None
+        )
+        if self.event_day:
+            self.fields["event_date"].initial = self.event_day.date
+        self.order_fields(("name", "event_date", *self.Meta.fields[1:]))
         for name in (
             "registration_opens_at",
             "registration_closes_at",
             "meal_orders_close_at",
         ):
             self.fields[name].input_formats = ["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S"]
+
+    def clean_event_date(self):
+        event_date = self.cleaned_data["event_date"]
+        if self.event_day and event_date != self.event_day.date:
+            if self.event_day.registrations.exists():
+                raise ValidationError(
+                    "La date ne peut plus être modifiée après une inscription. "
+                    "Créez un nouvel événement à partir d'un profil pour une autre date."
+                )
+            if self.instance.days.exclude(pk=self.event_day.pk).filter(date=event_date).exists():
+                raise ValidationError("Cette date existe déjà pour cet événement.")
+            if self.instance.days.exclude(pk=self.event_day.pk).filter(date__lt=event_date).exists():
+                raise ValidationError(
+                    "La date principale doit rester avant les autres dates de cet événement."
+                )
+        return event_date
 
 
 class EventDayForm(OrganizerFormMixin, forms.ModelForm):
@@ -327,7 +354,7 @@ class PricedOptionFormMixin(OrganizerFormMixin, forms.ModelForm):
 class MenuForm(PricedOptionFormMixin):
     class Meta:
         model = Menu
-        fields = ("name", "description", "is_active")
+        fields = ("name", "description", "meal_type", "is_active")
         widgets = {"description": forms.Textarea(attrs={"rows": 3})}
 
 
@@ -341,7 +368,7 @@ class BeverageForm(PricedOptionFormMixin):
 class MealOrderOrganizerForm(OrganizerFormMixin, forms.ModelForm):
     class Meta:
         model = MealOrder
-        fields = ("wants_meal", "menu", "beverage")
+        fields = ("wants_meal", "menu", "beverage", "payment_method")
 
     def __init__(self, *args, registration=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -349,16 +376,12 @@ class MealOrderOrganizerForm(OrganizerFormMixin, forms.ModelForm):
             registration = self.instance.registration
         self.registration = registration
         day = registration.event_day if registration is not None else None
-        self.fields["menu"].queryset = (
-            Menu.objects.filter(event_day=day, is_active=True).order_by("name")
-            if day is not None
-            else Menu.objects.none()
-        )
-        self.fields["beverage"].queryset = (
-            Beverage.objects.filter(event_day=day, is_active=True).order_by("name")
-            if day is not None
-            else Beverage.objects.none()
-        )
+        expected = Menu.MealType.FULL_MEAL if registration and registration.availability == Registration.Availability.FULL_DAY else Menu.MealType.SNACK
+        allowed = Q(is_active=True, meal_type=expected) | Q(pk=self.instance.menu_id, meal_type=expected)
+        if registration and self.instance.legacy_choice_availability == registration.availability:
+            allowed |= Q(pk=self.instance.menu_id)
+        self.fields["menu"].queryset = Menu.objects.filter(event_day=day).filter(allowed).order_by("name") if day else Menu.objects.none()
+        self.fields["beverage"].queryset = Beverage.objects.filter(event_day=day).filter(Q(is_active=True) | Q(pk=self.instance.beverage_id)).order_by("name") if day else Beverage.objects.none()
 
     def clean(self):
         cleaned = super().clean()

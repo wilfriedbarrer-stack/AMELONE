@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Récapitulatif des postes — {{ event.name }}{% endblock %}
+{% block body_class %}{% if print_view %}print-view{% endif %}{% endblock %}
+{% block content %}
+<header class="page-header no-print"><div class="shell header-copy"><div><span class="eyebrow">{{ event.name }}</span><h1>Récapitulatif des affectations</h1><p>Postes attribués aux participants et personnes encore à affecter.</p></div><div class="button-row"><a class="button button-secondary" href="{% url 'recap_assignments_csv' event.pk %}">Exporter en CSV</a><a class="button button-quiet" href="?print=1">Vue imprimable</a><a class="button button-quiet" href="{% url 'event_detail' event.pk %}">Retour à l'événement</a></div></div></header>
+<div class="shell page-stack">
+  <div class="print-only print-title"><h1>{{ event.name }} — affectations des postes</h1></div>
+  <section class="stat-grid no-print"><article class="stat-card"><span class="stat-value">{{ participant_count }}</span><span class="stat-label">participants actifs</span></article><article class="stat-card"><span class="stat-value">{{ assignment_count }}</span><span class="stat-label">affectations</span></article><article class="stat-card"><span class="stat-value">{{ unassigned_count }}</span><span class="stat-label">participants sans poste</span></article></section>
+  <div class="button-row no-print"><a class="button button-secondary" href="{% url 'assignment_board_event' event.pk %}">Gérer les affectations</a><a class="button button-quiet" href="{% url 'recap_meals' event.pk %}">Récapitulatif distinct des repas</a></div>
+  <section class="panel table-panel"><div class="responsive-table"><table><thead><tr><th>Date</th><th>Famille</th><th>Participant</th><th>Présence proposée</th><th>Poste</th><th>Période</th><th>Horaires</th><th>Statut</th></tr></thead><tbody>
+  {% for row in rows %}<tr><td>{{ row.registration.event_day.date|date:"d/m/Y" }}</td><td>{{ row.registration.member.family.display_name }}</td><td><strong>{{ row.registration.member.full_name }}</strong></td><td>{{ row.registration.get_availability_display }}</td><td>{{ row.station }}</td><td>{{ row.period }}</td><td>{% if row.start_time %}{{ row.start_time|time:"H:i" }}–{{ row.end_time|time:"H:i" }}{% else %}—{% endif %}</td><td>{{ row.status }}</td></tr>{% empty %}<tr><td colspan="8">Aucun participant inscrit à cet événement.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+</div>
+{% endblock %}
