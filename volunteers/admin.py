@@ -1,8 +1,9 @@
 from django.contrib import admin
 from django.contrib.auth.admin import GroupAdmin as DjangoGroupAdmin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
+from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from django.contrib.auth.models import Group
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 
 from .models import (
     Assignment,
@@ -28,6 +29,26 @@ from .models import (
 
 class ReadOnlyTimestampsMixin:
     readonly_fields = ("id", "created_at", "updated_at")
+
+
+class NormalizedEmailMixin:
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        if User.objects.filter(email__iexact=email).exclude(pk=self.instance.pk).exists():
+            raise ValidationError("Cette adresse e-mail est déjà utilisée.")
+        return email
+
+
+class AdminProfileCreationForm(NormalizedEmailMixin, AdminUserCreationForm):
+    class Meta(AdminUserCreationForm.Meta):
+        model = User
+        fields = ("email",)
+
+
+class AdminProfileChangeForm(NormalizedEmailMixin, UserChangeForm):
+    class Meta(UserChangeForm.Meta):
+        model = User
+        fields = "__all__"
 
 
 class AdministratorOnlyMixin:
@@ -62,6 +83,14 @@ admin.site.index_title = "Gestion de l’association"
 
 @admin.register(User)
 class UserAdmin(AdministratorOnlyMixin, DjangoUserAdmin):
+    add_form = AdminProfileCreationForm
+    form = AdminProfileChangeForm
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if not (obj.is_staff or obj.is_superuser or obj.is_organizer):
+            Family.objects.get_or_create(account=obj)
+
     def get_readonly_fields(self, request, obj=None):
         fields = super().get_readonly_fields(request, obj)
         if obj and obj.pk == request.user.pk:

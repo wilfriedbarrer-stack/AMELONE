@@ -10,7 +10,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from PIL import Image, UnidentifiedImageError
 
-from .models import Event, SiteBranding, User
+from .models import Event, Family, SiteBranding, User
 from .views_organizer import organizer_required
 
 
@@ -111,6 +111,8 @@ def profile_update(request, user_id):
                     profile.is_organizer = role in {"administrator", "organizer"}
                     # A role change must remove any previously delegated Django permissions.
                     profile.save()
+                    if role == "family":
+                        Family.objects.get_or_create(account=profile)
                     profile.groups.clear()
                     profile.user_permissions.clear()
                     messages.success(request, "Le profil et ses droits ont été enregistrés.")

@@ -42,6 +42,8 @@ class AdministrationTests(DataMixin, TestCase):
         self.assertFalse(self.organizer.is_organizer)
         self.assertFalse(self.organizer.is_staff)
         self.assertFalse(self.organizer.user_permissions.exists())
+        self.client.force_login(self.organizer)
+        self.assertEqual(self.client.get(reverse("family_dashboard")).status_code, 200)
 
     def test_admin_cannot_remove_own_access(self):
         self.client.force_login(self.admin)
@@ -89,3 +91,24 @@ class AdministrationTests(DataMixin, TestCase):
         menu.refresh_from_db()
         self.assertEqual(menu.name, "Menu végétarien")
         self.assertFalse(menu.is_active)
+
+    def test_admin_created_family_account_has_usable_space(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("admin:volunteers_user_add"), {
+            "email": "nouveau@example.test", "first_name": "Nouveau", "last_name": "Membre",
+            "phone": "", "password1": "Unique-admin-created-123!",
+            "password2": "Unique-admin-created-123!", "is_active": "on",
+        })
+        self.assertEqual(response.status_code, 302)
+        account = User.objects.get(email="nouveau@example.test")
+        self.client.force_login(account)
+        self.assertEqual(self.client.get(reverse("family_dashboard")).status_code, 200)
+
+    def test_admin_email_case_duplicate_returns_form_error(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("admin:volunteers_user_add"), {
+            "email": self.family_user.email.upper(), "password1": "Unique-admin-created-123!",
+            "password2": "Unique-admin-created-123!", "is_active": "on",
+        })
+        self.assertContains(response, "Cette adresse e-mail est déjà utilisée.")
+        self.assertEqual(User.objects.filter(email__iexact=self.family_user.email).count(), 1)
