@@ -1,3 +1,36 @@
 {% extends "base.html" %}
 {% block title %}Profils et droits — AMELONE{% endblock %}
-{% block content %}<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Administration</span><h1>Profils et droits</h1><p>Famille : espace personnel. Organisateur : événements, postes et repas. Administrateur : profils et tous les droits.</p></div><a class="button button-primary" href="{% url 'admin:volunteers_user_add' %}">Créer un compte</a></div></header><div class="shell page-stack"><section class="panel table-panel"><div class="responsive-table"><table><thead><tr><th>Nom</th><th>E-mail</th><th>Droits</th><th>État</th><th></th></tr></thead><tbody>{% for profile in profiles %}<tr><td>{{ profile.get_full_name|default:"—" }}</td><td>{{ profile.email }}</td><td>{% if profile.is_superuser %}Administrateur{% elif profile.is_organizer or profile.is_staff %}Organisateur{% else %}Famille{% endif %}</td><td>{{ profile.is_active|yesno:"Actif,Désactivé" }}</td><td><a href="{% url 'profile_update' profile.pk %}">Modifier le profil et les droits</a></td></tr>{% endfor %}</tbody></table></div></section><a href="{% url 'administration_dashboard' %}">Retour à l’administration</a></div>{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div class="shell header-copy">
+        <div>
+            <span class="eyebrow">Administration</span>
+            <h1>Profils et droits</h1>
+            <p>Famille : espace personnel. Organisateur : événements, postes et repas. Administrateur : profils et tous les droits.</p>
+            <p>Le profil Officiel de compétition se cumule avec chacun de ces droits.</p>
+        </div>
+        <a class="button button-primary" href="{% url 'admin:volunteers_user_add' %}">Créer un compte</a>
+    </div>
+</header>
+<div class="shell page-stack">
+    <section class="panel table-panel">
+        <div class="responsive-table">
+            <table>
+                <thead><tr><th>Nom</th><th>E-mail</th><th>Droits et profil</th><th>État</th><th></th></tr></thead>
+                <tbody>
+                    {% for profile in profiles %}
+                    <tr>
+                        <td>{{ profile.get_full_name|default:"—" }}</td>
+                        <td>{{ profile.email }}</td>
+                        <td>{% if profile.is_superuser %}Administrateur{% elif profile.is_organizer or profile.is_staff %}Organisateur{% else %}Famille{% endif %}{% if profile.is_competition_official %} + Officiel de compétition{% endif %}</td>
+                        <td>{{ profile.is_active|yesno:"Actif,Désactivé" }}</td>
+                        <td><a href="{% url 'profile_update' profile.pk %}">Modifier le profil et les droits</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <a href="{% url 'administration_dashboard' %}">Retour à l’administration</a>
+</div>
+{% endblock %}

@@ -52,6 +52,9 @@ class User(AbstractUser):
     email = models.EmailField(_("adresse e-mail"), unique=True)
     phone = models.CharField(_("téléphone"), max_length=32, blank=True)
     is_organizer = models.BooleanField(_("organisateur"), default=False)
+    is_competition_official = models.BooleanField(
+        _("officiel de compétition"), default=False, db_default=False
+    )
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
@@ -109,6 +112,14 @@ class Member(UUIDTimeStampedModel):
         on_delete=models.PROTECT,
         related_name="members",
     )
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        verbose_name=_("compte personnel"),
+        on_delete=models.PROTECT,
+        related_name="participant_profile",
+        null=True,
+        blank=True,
+    )
     first_name = models.CharField(_("prénom"), max_length=150)
     last_name = models.CharField(_("nom"), max_length=150)
     birth_date = models.DateField(_("date de naissance"))
@@ -125,6 +136,10 @@ class Member(UUIDTimeStampedModel):
 
     def clean(self):
         super().clean()
+        if self.user_id and self.family_id and self.family.account_id != self.user_id:
+            raise ValidationError(
+                {"user": _("Le compte personnel doit être le compte responsable de cette famille.")}
+            )
         if self.birth_date and self.birth_date > timezone.localdate():
             raise ValidationError({"birth_date": _("La date de naissance ne peut pas être future.")})
 

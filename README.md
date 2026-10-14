@@ -86,7 +86,8 @@ Les menus et boissons peuvent être désactivés sans supprimer les réservation
 Les administrateurs (comptes superutilisateurs Django) disposent aussi de :
 
 - **Profils et droits** : identité, activation et rôles famille, organisateur ou
-  administrateur ; création de comptes via l’administration avancée ;
+  administrateur ; rôle complémentaire **Officiel de compétition**, cumulable
+  avec ces droits ; création de comptes via l’administration avancée ;
 - **Logo de l’association** : téléversement PNG, JPEG ou WebP jusqu’à 1 Mo.
   Le fichier est validé et conservé en base, sans dépendre du disque temporaire
   de Render. Il apparaît sur toutes les pages et dans l’accueil.
@@ -118,3 +119,25 @@ Les postes acceptent désormais la période Journée.
 L’import CSV/Excel affiche un aperçu à valider. Les récapitulatifs des postes et
 de la restauration sont distincts, imprimables et exportables en CSV. Voir le
 [guide et les colonnes des fichiers](docs/profils-repas-imports.md).
+
+## Participation personnelle des administrateurs et officiels
+
+Dans **Profils et droits**, cochez **Officiel de compétition** sur le compte
+souhaité. Cette option conserve les droits famille, organisateur ou administrateur.
+Un officiel seul n’obtient aucun droit de gestion ni de confirmation d’affectation.
+
+Le lien **Ma participation** ouvre `/participation/`. Complétez votre identité
+une seule fois, ou rattachez un membre existant de votre propre famille. Ce profil
+personnel peut ensuite être réutilisé pour tous les événements.
+
+Un administrateur choisit sa présence, ses repas et les créneaux de ses postes.
+Les affectations sont confirmées directement sous réserve des capacités et des
+périodes compatibles. Décocher un poste conserve son historique d’annulation ;
+enregistrer plusieurs fois le même choix ne crée pas de doublons. L’inscription,
+la restauration et les affectations sont enregistrées ensemble : en cas d’erreur,
+aucune modification partielle n’est conservée.
+
+Un officiel sans droits administrateur indique son poste souhaité ; l’organisation
+confirme ensuite l’affectation. Les échéances habituelles restent applicables.
+La migration `0005_competition_official_personal_member` est appliquée par le script
+Render lors de la publication.

@@ -32,8 +32,11 @@ class ProfileForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ("email", "first_name", "last_name", "phone", "is_active")
+        fields = ("email", "first_name", "last_name", "phone", "is_active", "is_competition_official")
         labels = {"is_active": "Compte actif"}
+        help_texts = {
+            "is_competition_official": "Ce profil se cumule avec les droits sélectionnés ci-dessous.",
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

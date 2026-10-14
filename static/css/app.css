@@ -77,10 +77,10 @@ p:last-child { margin-bottom: 0; }
 .brand-mark::after { content: "♥"; position: absolute; right: -.28rem; bottom: -.2rem; width: 1rem; height: 1rem; display: grid; place-items: center; border: .12rem solid #fff; border-radius: 50%; color: #fff; background: var(--brand-pink); font: 700 .56rem/1 sans-serif; }
 .brand strong { display: block; font-size: 1.02rem; letter-spacing: .12em; line-height: 1; }
 .brand small { display: block; margin-top: .3rem; color: var(--ink-soft); font-size: .68rem; white-space: nowrap; }
-.primary-nav { display: flex; align-items: center; justify-content: center; gap: .15rem; margin-inline: auto; }
+.primary-nav { display: flex; flex-wrap: wrap; min-width: 0; align-items: center; justify-content: center; gap: .15rem; margin-inline: auto; }
 .primary-nav a { padding: .62rem .72rem; border-radius: .5rem; color: var(--ink); font-size: .89rem; font-weight: 650; text-decoration: none; white-space: nowrap; }
 .primary-nav a:hover { background: var(--mint-pale); }
-.account-actions { display: flex; align-items: center; gap: .65rem; }
+.account-actions { display: flex; flex-shrink: 0; align-items: center; gap: .65rem; }
 .account-actions form { margin: 0; }
 .user-label { max-width: 8rem; overflow: hidden; color: var(--ink-soft); font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-nav { display: flex; align-items: center; gap: .2rem; margin-top: 1.6rem; overflow-x: auto; scrollbar-width: thin; }
@@ -188,6 +188,9 @@ p:last-child { margin-bottom: 0; }
 .field-checkbox input { width: 1.1rem; height: 1.1rem; margin-top: .2rem; accent-color: var(--forest); }
 .field-checkbox label { margin: 0; }
 .field-checkbox .help-text, .field-checkbox .field-errors { grid-column: 2; }
+.field-options > div { display: grid; gap: .55rem; }
+.field-options > div label { display: flex; align-items: start; gap: .6rem; margin-bottom: 0; font-weight: 500; }
+.field-options input { flex-shrink: 0; width: 1.1rem; height: 1.1rem; margin-top: .2rem; accent-color: var(--forest); }
 .required { color: var(--danger); }
 .help-text { margin-top: .28rem; color: var(--ink-soft); font-size: .78rem; }
 .help-text ul { margin: .35rem 0 0; padding-left: 1.1rem; }
@@ -414,7 +417,7 @@ tbody tr:hover { background: #fcfdfc; }
 
 @media (max-width: 68rem) {
   .header-inner { flex-wrap: wrap; padding-block: .8rem; }
-  .primary-nav { order: 3; width: 100%; justify-content: flex-start; overflow-x: auto; }
+  .primary-nav { order: 3; width: 100%; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; }
   .account-actions { margin-left: auto; }
   .hero-grid { grid-template-columns: 1fr; min-height: 0; }
   .hero-card { max-width: 38rem; }

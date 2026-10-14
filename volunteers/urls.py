@@ -8,9 +8,13 @@ from . import (
     views_organizer,
     views_profiles,
     views_public,
+    views_self,
 )
 
 urlpatterns = [
+    path("participation/", views_self.personal_participation, name="personal_participation"),
+    path("participation/profil/", views_self.personal_profile, name="personal_profile"),
+    path("participation/journees/<uuid:event_day_id>/", views_self.personal_registration, name="personal_registration"),
     path("organisateur/inscriptions/<uuid:registration_id>/restauration/", views_organizer.meal_order_create, name="meal_order_create"),
     path("administration/reglement/", views_administration.payment_settings, name="payment_settings"),
     path("organisateur/profils-evenement/", views_profiles.event_profile_list, name="event_profile_list"),

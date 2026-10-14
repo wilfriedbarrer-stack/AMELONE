@@ -6,8 +6,8 @@
 {% endif %}
 {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
 {% for field in form.visible_fields %}
-  <div class="field{% if field.errors %} field-error{% endif %}{% if field.field.widget.input_type == 'checkbox' %} field-checkbox{% endif %}">
-    {% if field.field.widget.input_type == 'checkbox' %}
+  <div class="field{% if field.errors %} field-error{% endif %}{% if field.field.widget.allow_multiple_selected and field.field.widget.input_type == 'checkbox' %} field-options{% elif field.field.widget.input_type == 'checkbox' %} field-checkbox{% endif %}">
+    {% if field.field.widget.input_type == 'checkbox' and not field.field.widget.allow_multiple_selected %}
       {{ field }}
       <label for="{{ field.id_for_label }}">{{ field.label }}</label>
     {% else %}
