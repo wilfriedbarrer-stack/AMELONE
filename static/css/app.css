@@ -525,3 +525,8 @@ tbody tr:hover { background: #fcfdfc; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* Identité de l’association, proportions du logo conservées. */
+.association-logo { width: 76px; height: 76px; object-fit: contain; flex-shrink: 0; background: white; border-radius: 8px; }
+.association-logo-hero { display: block; width: min(100%, 260px); height: auto; margin-bottom: 1.5rem; }
+@media (max-width: 600px) { .association-logo { width: 56px; height: 56px; } }

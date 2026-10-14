@@ -966,3 +966,9 @@ class LegacyImportRecord(UUIDTimeStampedModel):
 
     def __str__(self):
         return f"{self.get_source_type_display()} {self.legacy_id} — {self.get_status_display()}"
+
+
+class SiteBranding(models.Model):
+    """Le logo est conservé en base pour survivre aux redéploiements Render."""
+
+    logo_data = models.TextField(blank=True)

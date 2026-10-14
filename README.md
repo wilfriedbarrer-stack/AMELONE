@@ -74,3 +74,30 @@ l'application après la première connexion.
 - L'ancien fichier `Code-complet.txt` n'ayant pas été fourni, l'import repose sur des
   exports CSV documentés et produit un rapport des données à compléter sans les inventer.
 
+
+## Administration de l’association
+
+Après connexion, le lien **Administration** ouvre `/administration/` pour les
+organisateurs et les administrateurs. Chaque événement donne accès à la création
+et à la modification des postes, de leurs créneaux, des menus et des boissons.
+Les menus et boissons peuvent être désactivés sans supprimer les réservations.
+
+Les administrateurs (comptes superutilisateurs Django) disposent aussi de :
+
+- **Profils et droits** : identité, activation et rôles famille, organisateur ou
+  administrateur ; création de comptes via l’administration avancée ;
+- **Logo de l’association** : téléversement PNG, JPEG ou WebP jusqu’à 1 Mo.
+  Le fichier est validé et conservé en base, sans dépendre du disque temporaire
+  de Render. Il apparaît sur toutes les pages et dans l’accueil.
+
+Un organisateur peut gérer les événements, postes et repas, mais pas attribuer des
+privilèges. Un administrateur ne peut ni désactiver son propre compte, ni retirer
+ses propres droits, ni se supprimer. La gestion avancée des utilisateurs et des
+groupes est réservée aux administrateurs afin d’empêcher une élévation de droits.
+L’application des changements de rôle supprime les anciennes permissions
+individuelles et les anciens groupes du compte concerné.
+
+Déploiement : installer les dépendances mises à jour, appliquer la migration
+`0002_sitebranding` et exécuter `collectstatic`. Le script Render effectue ces
+étapes automatiquement. Pour le premier administrateur, utiliser
+`createsuperuser` ou le compte initial créé par `bootstrap_admin`.

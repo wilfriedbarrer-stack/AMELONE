@@ -17,13 +17,14 @@
     <div class="shell header-inner">
       {% url 'home' as home_url %}
       <a class="brand" href="{{ home_url|default:'/' }}" aria-label="Amelone Loisirs — accueil">
-        <span class="brand-mark" aria-hidden="true">A</span>
+        {% if association_logo %}<img class="association-logo" src="{{ association_logo }}" alt="Logo Amelone Loisirs">{% else %}<span class="brand-mark" aria-hidden="true">A</span>{% endif %}
         <span><strong>AMELONE LOISIRS</strong><small>Parents, grands-parents et cavaliers</small></span>
       </a>
 
       <nav class="primary-nav" aria-label="Navigation principale">
         {% if user.is_authenticated %}
           {% if is_organizer %}
+            <a href="{% url 'administration_dashboard' %}">Administration</a>
             {% url 'organizer_dashboard' as organizer_dashboard_url %}
             {% url 'event_list' as event_list_url %}
             {% url 'assignment_board' as assignment_board_url %}
