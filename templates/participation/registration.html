@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Ma participation à {{ event_day.event.name }} — AMELONE{% endblock %}
+{% block content %}
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Ma participation</span><h1>{{ event_day.event.name }}</h1><p>{{ member.full_name }} · {{ event_day.date|date:"l j F Y"|capfirst }}</p></div></div></header>
+<div class="shell narrow-content page-stack">
+<section class="info-banner"><span aria-hidden="true">i</span><div><strong>Journée : repas complet. Demi-journée : collation.</strong><p>{% if is_administrator %}Choisissez votre présence et vos postes. Les affectations sélectionnées sont confirmées si les places et les périodes le permettent.{% else %}Choisissez votre présence et votre poste souhaité. L’organisation confirmera votre affectation.{% endif %}</p></div></section>
+{% if not form.meal_choices_open %}<section class="alert alert-info"><p>Les réservations de restauration sont clôturées. Vos choix enregistrés sont conservés.</p></section>{% endif %}
+<section class="panel"><form method="post" class="stack-form" novalidate>{% csrf_token %}{% include "partials/form_fields.html" %}<p id="meal-entitlement" class="help-text" aria-live="polite"></p><div class="form-actions"><a class="button button-quiet" href="{% url 'personal_participation' %}">Annuler</a><button class="button button-primary" type="submit">Enregistrer ma participation</button></div></form></section>
+</div>
+{% include "partials/participation_meal_script.html" %}
+{% endblock %}

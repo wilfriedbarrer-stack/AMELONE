@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#12651c">
   <title>{% block title %}AMELONE LOISIRS{% endblock %}</title>
   <meta name="description" content="Gestion des bénévoles et des événements de l’association Amelone Loisirs.">
-  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=amelone-loisirs-2">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=amelone-loisirs-3">
   {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -43,6 +43,7 @@
             <a href="{{ open_events_url|default:'/famille/evenements/' }}">Événements</a>
             <a href="{{ family_assignments_url|default:'/famille/affectations/' }}">Affectations</a>
           {% endif %}
+          {% if can_self_participate %}<a href="{% url 'personal_participation' %}">Ma participation</a>{% endif %}
         {% else %}
           {% url 'public_events' as public_events_url %}
           {% url 'public_planning' as public_planning_url %}

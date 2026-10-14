@@ -138,7 +138,7 @@ class FamilyRegistrationForm(forms.Form):
         widget=forms.Textarea(attrs={"rows": 3}),
     )
 
-    def __init__(self, *args, event_day, registration=None, **kwargs):
+    def __init__(self, *args, event_day, registration=None, allow_closed_meals=False, **kwargs):
         self.event_day = event_day
         self.registration = registration
         if registration is not None and "initial" not in kwargs:
@@ -152,7 +152,7 @@ class FamilyRegistrationForm(forms.Form):
             event=event_day.event,
             is_active=True,
         ).order_by("name")
-        self.meal_choices_open = event_day.event.meal_orders_are_open()
+        self.meal_choices_open = allow_closed_meals or event_day.event.meal_orders_are_open()
         self.menu_options = []
         if self.meal_choices_open:
             order = MealOrder.objects.filter(registration=registration).first() if registration else None

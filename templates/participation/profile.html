@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Mon profil de participant — AMELONE{% endblock %}
+{% block content %}
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Ma participation</span><h1>Mon profil de participant</h1><p>Ces informations servent à vous inscrire personnellement aux événements.</p></div></div></header>
+<div class="shell narrow-content page-stack"><section class="panel">
+<form method="post" class="stack-form" novalidate>{% csrf_token %}{% include "partials/form_fields.html" %}
+<div class="form-actions"><a class="button button-quiet" href="{% url 'personal_participation' %}">Annuler</a><button class="button button-primary" type="submit">Enregistrer mon profil</button></div>
+</form></section></div>
+{% endblock %}

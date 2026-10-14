@@ -1,0 +1,28 @@
+{{ form.menu_options|json_script:"menu-options" }}
+<script>
+(() => {
+ const availability = document.getElementById('id_availability'), menu = document.getElementById('id_menu');
+ const noMeal = document.getElementById('id_no_meal'), beverage = document.getElementById('id_beverage');
+ if (!availability || !menu || !noMeal) return;
+ const options = JSON.parse(document.getElementById('menu-options').textContent);
+ function updateMenus() {
+  const previous = menu.value, type = availability.value === 'full_day' ? 'full_meal' : 'snack';
+  menu.replaceChildren(new Option('Choisir selon la présence', ''));
+  for (const option of options) {
+   if (option.type !== type && option.legacy !== availability.value) continue;
+   const label = option.name + ' — supplément ' + (option.surcharge / 100).toLocaleString('fr-FR', {style:'currency',currency:'EUR'});
+   menu.add(new Option(label, option.id));
+  }
+  if ([...menu.options].some(option => option.value === previous)) menu.value = previous;
+  document.getElementById('meal-entitlement').textContent = type === 'full_meal' ? 'Votre présence à la journée donne accès à un repas complet.' : 'Votre présence à la demi-journée donne accès à une collation.';
+ }
+ function updateMeal() {
+  menu.disabled = noMeal.checked;
+  if (beverage) beverage.disabled = noMeal.checked;
+  if (noMeal.checked) { menu.value = ''; if (beverage) beverage.value = ''; }
+ }
+ availability.addEventListener('change', () => {updateMenus(); updateMeal();});
+ noMeal.addEventListener('change', updateMeal);
+ updateMenus(); updateMeal();
+})();
+</script>

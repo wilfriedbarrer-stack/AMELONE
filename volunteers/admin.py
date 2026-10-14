@@ -113,16 +113,18 @@ class UserAdmin(AdministratorOnlyMixin, DjangoUserAdmin):
         "first_name",
         "last_name",
         "phone",
+        "is_competition_official",
         "is_organizer",
         "is_staff",
         "is_active",
     )
-    list_filter = ("is_organizer", "is_staff", "is_active", "groups")
+    list_filter = ("is_competition_official", "is_organizer", "is_staff", "is_active", "groups")
     search_fields = ("email", "first_name", "last_name", "phone")
     readonly_fields = ("id", "last_login", "date_joined")
     fieldsets = (
         (None, {"fields": ("id", "email", "password")}),
         ("Identité", {"fields": ("first_name", "last_name", "phone")}),
+        ("Participation", {"fields": ("is_competition_official",)}),
         (
             "Droits",
             {
@@ -150,6 +152,7 @@ class UserAdmin(AdministratorOnlyMixin, DjangoUserAdmin):
                     "phone",
                     "password1",
                     "password2",
+                    "is_competition_official",
                     "is_organizer",
                     "is_staff",
                     "is_active",
