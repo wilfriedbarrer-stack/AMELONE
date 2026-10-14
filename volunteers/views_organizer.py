@@ -772,3 +772,15 @@ def tracking_export(request):
         )
     return response
 
+
+
+@organizer_required
+def menu_update(request, menu_id):
+    menu = get_object_or_404(Menu.objects.select_related("event_day__event"), pk=menu_id)
+    return _priced_option_form(request, menu.event_day, Menu, MenuForm, instance=menu)
+
+
+@organizer_required
+def beverage_update(request, beverage_id):
+    beverage = get_object_or_404(Beverage.objects.select_related("event_day__event"), pk=beverage_id)
+    return _priced_option_form(request, beverage.event_day, Beverage, BeverageForm, instance=beverage)

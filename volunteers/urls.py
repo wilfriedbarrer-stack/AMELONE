@@ -1,8 +1,14 @@
 from django.urls import path
 
-from . import views, views_family, views_organizer, views_public
+from . import views, views_administration, views_family, views_organizer, views_public
 
 urlpatterns = [
+    path("organisateur/menus/<uuid:menu_id>/modifier/", views_organizer.menu_update, name="menu_update"),
+    path("organisateur/boissons/<uuid:beverage_id>/modifier/", views_organizer.beverage_update, name="beverage_update"),
+    path("administration/", views_administration.administration_dashboard, name="administration_dashboard"),
+    path("administration/profils/", views_administration.profile_list, name="profile_list"),
+    path("administration/profils/<uuid:user_id>/", views_administration.profile_update, name="profile_update"),
+    path("administration/logo/", views_administration.branding_update, name="branding_update"),
     path("", views_public.home, name="home"),
     path("sante/", views.health, name="health"),
     path("tableau-de-bord/", views.dashboard, name="dashboard"),

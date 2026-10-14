@@ -1,5 +1,8 @@
 from django.contrib import admin
+from django.contrib.auth.admin import GroupAdmin as DjangoGroupAdmin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
+from django.contrib.auth.models import Group
+from django.core.exceptions import PermissionDenied
 
 from .models import (
     Assignment,
@@ -27,8 +30,54 @@ class ReadOnlyTimestampsMixin:
     readonly_fields = ("id", "created_at", "updated_at")
 
 
+class AdministratorOnlyMixin:
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return self.has_module_permission(request)
+
+    def has_add_permission(self, request):
+        return self.has_module_permission(request)
+
+    def has_change_permission(self, request, obj=None):
+        return self.has_module_permission(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return self.has_module_permission(request)
+
+
+admin.site.unregister(Group)
+
+
+@admin.register(Group)
+class GroupAdmin(AdministratorOnlyMixin, DjangoGroupAdmin):
+    pass
+
+
+admin.site.site_header = "Amelone Loisirs — Administration"
+admin.site.site_title = "Administration AMELONE"
+admin.site.index_title = "Gestion de l’association"
+
+
 @admin.register(User)
-class UserAdmin(DjangoUserAdmin):
+class UserAdmin(AdministratorOnlyMixin, DjangoUserAdmin):
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        if obj and obj.pk == request.user.pk:
+            return (*fields, "is_active", "is_superuser", "is_staff")
+        return fields
+
+    def has_delete_permission(self, request, obj=None):
+        return super().has_delete_permission(request, obj) and (
+            obj is None or obj.pk != request.user.pk
+        )
+
+    def delete_queryset(self, request, queryset):
+        if queryset.filter(pk=request.user.pk).exists():
+            raise PermissionDenied("Vous ne pouvez pas supprimer votre propre compte administrateur.")
+        super().delete_queryset(request, queryset)
+
     ordering = ("email",)
     list_display = (
         "email",
