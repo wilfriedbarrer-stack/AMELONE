@@ -52,6 +52,13 @@ UV_CACHE_DIR=/workspace/.cache/uv uv run coverage report
 
 ## Déploiement et intégrations
 
+[![Déployer sur Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/wilfriedbarrer-stack/AMELONE)
+
+Le déploiement Render crée automatiquement le service web, PostgreSQL et le premier
+compte organisateur. Render demande l'adresse e-mail et le mot de passe initial au
+moment de la création. Choisir un mot de passe long et unique, puis le modifier dans
+l'application après la première connexion.
+
 - [Configuration des emails](docs/emails.md)
 - [Déploiement](docs/deploiement.md)
 - [Import depuis Google Sheets](docs/import-google-sheets.md)

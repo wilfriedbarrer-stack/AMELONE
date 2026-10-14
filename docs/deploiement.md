@@ -1,5 +1,18 @@
 # Déploiement
 
+## Render en un clic
+
+Le fichier `render.yaml` crée un service web et une base PostgreSQL. Pendant la création
+du Blueprint, renseigner `INITIAL_ADMIN_EMAIL` et `INITIAL_ADMIN_PASSWORD`. Le mot de
+passe doit être long et unique ; il n'est jamais écrit dans les journaux. La commande de
+préparation crée ce compte une seule fois et refuse de promouvoir silencieusement un
+compte familial existant.
+
+Après la première connexion, modifier le mot de passe puis supprimer les deux variables
+`INITIAL_ADMIN_*` dans Render. Les offres gratuites de Render peuvent être mises en
+veille ou limitées dans le temps ; vérifier le récapitulatif tarifaire affiché avant de
+confirmer la création.
+
 ## Variables obligatoires
 
 - `DJANGO_SECRET_KEY` : valeur aléatoire longue ;
