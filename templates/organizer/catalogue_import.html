@@ -1,0 +1,23 @@
+{% extends "base.html" %}{% load volunteer_extras %}
+{% block title %}Importer les {{ label }} — {{ event.name }}{% endblock %}
+{% block content %}
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">{{ event.name }}</span><h1>Importer les {{ label }}</h1><p>Vérifiez l'ensemble des lignes avant de confirmer l'import.</p></div><a class="button button-secondary" href="{% url 'catering' event.pk %}">Retour aux menus et boissons</a></div></header>
+<div class="shell page-stack">
+  <section class="panel">
+    <div class="panel-heading"><h2>Choisir votre fichier</h2><a class="button button-small button-secondary" href="{% url 'catalogue_template' kind %}">Télécharger le modèle CSV</a></div>
+    <p>Colonnes : <strong>nom</strong>, <strong>description</strong>, <strong>supplement_euros</strong>{% if kind == 'menus' %}, <strong>type</strong> (repas ou collation){% endif %}. Seul le nom est obligatoire. Sans supplément, le montant est de 0 €{% if kind == 'menus' %} ; sans type, le menu est un repas complet{% endif %}.</p>
+    <p>Le CSV accepte les séparateurs point-virgule, virgule ou tabulation. Pour Excel, utilisez une seule feuille au format .xlsx. Remplacez ou supprimez les lignes « EXEMPLE » du modèle.</p>
+    <form method="post" enctype="multipart/form-data" class="form-stack">{% csrf_token %}<input type="hidden" name="action" value="preview">{% include "partials/form_fields.html" with form=upload_form %}<div class="button-row"><button class="button button-primary" type="submit">Prévisualiser l'import</button></div></form>
+  </section>
+  {% if preview %}
+  <section class="panel table-panel">
+    <div class="panel-heading"><div><span class="eyebrow">{% if day %}{{ day.date|date:"d/m/Y" }}{% endif %}</span><h2>Aperçu des {{ preview.rows|length }} lignes</h2></div></div>
+    {% for error in preview.errors %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endfor %}
+    <div class="responsive-table"><table><thead><tr><th>Ligne</th><th>Nom</th><th>Description</th>{% if kind == 'menus' %}<th>Type</th>{% endif %}<th>Supplément</th><th>Résultat</th></tr></thead><tbody>
+    {% for row in preview.rows %}<tr><td>{{ row.line }}</td><td><strong>{{ row.name|default:"Nom manquant" }}</strong></td><td>{{ row.description|default:"—" }}</td>{% if kind == 'menus' %}<td>{% if row.meal_type == 'snack' %}Collation{% else %}Repas complet{% endif %}</td>{% endif %}<td>{{ row.surcharge_cents|euros }}</td><td>{% if row.errors %}{% for error in row.errors %}<p class="field-error">{{ error }}</p>{% endfor %}{% elif row.action == 'update' %}<span class="badge badge-warning">Mise à jour</span>{% else %}<span class="badge badge-success">Création</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="6">Aucune ligne à importer.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  {% if confirm_form %}<section class="panel"><h2>Confirmer l'import</h2><p>{{ preview.rows|length }} {{ label }} seront enregistrés{% if update_count %}, dont {{ update_count }} mises à jour d'options existantes{% endif %}. Les autres options sont conservées.</p><form method="post" class="form-stack">{% csrf_token %}<input type="hidden" name="action" value="confirm">{{ confirm_form.preview_token }}{{ confirm_form.non_field_errors }}{% if update_count %}<div class="field">{{ confirm_form.confirm_updates }} {{ confirm_form.confirm_updates.label_tag }}{{ confirm_form.confirm_updates.errors }}</div>{% endif %}<button class="button button-primary" type="submit">Confirmer l'import des {{ label }}</button></form></section>{% else %}<div class="alert alert-warning">Aucun changement n'a été enregistré. Corrigez votre fichier, puis prévisualisez-le à nouveau.</div>{% endif %}
+  {% endif %}
+</div>
+{% endblock %}

@@ -18,7 +18,6 @@ from .forms_organizer import (
     BeverageForm,
     ConfirmationEmailForm,
     DuplicateEventForm,
-    EventDayFormSet,
     EventForm,
     MealOrderOrganizerForm,
     MenuForm,
@@ -115,18 +114,40 @@ def event_list(request):
 
 def _event_form(request, event=None):
     form = EventForm(request.POST or None, instance=event)
-    formset = EventDayFormSet(request.POST or None, instance=event, prefix="days")
-    if request.method == "POST" and form.is_valid() and formset.is_valid():
-        with transaction.atomic():
-            saved = form.save()
-            formset.instance = saved
-            formset.save()
-        messages.success(request, "L'événement et ses journées ont été enregistrés.")
-        return redirect("event_detail", event_id=saved.pk)
+    if request.method == "POST" and form.is_valid():
+        try:
+            with transaction.atomic():
+                if event is not None:
+                    Event.objects.select_for_update().get(pk=event.pk)
+                saved = form.save()
+                if form.event_day:
+                    day = EventDay.objects.select_for_update().get(pk=form.event_day.pk)
+                    if day.date != form.cleaned_data["event_date"]:
+                        if day.registrations.exists():
+                            raise ValidationError(
+                                "La date ne peut plus être modifiée après une inscription."
+                            )
+                        day.date = form.cleaned_data["event_date"]
+                        day.full_clean()
+                        day.save(update_fields=("date", "updated_at"))
+                else:
+                    EventDay.objects.get_or_create(
+                        event=saved, date=form.cleaned_data["event_date"]
+                    )
+        except ValidationError as error:
+            for text in _form_error_messages(error):
+                form.add_error("event_date", text)
+        else:
+            messages.success(request, "L'événement a été enregistré.")
+            return redirect("event_detail", event_id=saved.pk)
     return render(
         request,
         "volunteers/organizer/event_form.html",
-        {"form": form, "formset": formset, "event": event},
+        {
+            "form": form,
+            "event": event,
+            "additional_days": event.days.order_by("date")[1:] if event else (),
+        },
     )
 
 
@@ -213,6 +234,7 @@ def event_duplicate(request, event_id):
                             description=menu.description,
                             surcharge_cents=menu.surcharge_cents,
                             is_active=menu.is_active,
+                            meal_type=menu.meal_type,
                         )
                     for drink in Beverage.objects.filter(event_day_id=old_day_id):
                         Beverage.objects.create(
@@ -250,14 +272,27 @@ def _station_form(request, event, station=None):
         form_kwargs={"event": event},
     )
     if request.method == "POST" and form.is_valid() and formset.is_valid():
-        with transaction.atomic():
-            saved = form.save(commit=False)
-            saved.event = event
-            saved.save()
-            formset.instance = saved
-            formset.save()
-        messages.success(request, "Le poste et ses capacités ont été enregistrés.")
-        return redirect("event_detail", event_id=event.pk)
+        try:
+            with transaction.atomic():
+                existing_ids = [item.instance.pk for item in formset.forms if item.instance.pk]
+                list(StationSlot.objects.select_for_update().filter(pk__in=existing_ids).order_by("pk"))
+                for item in formset.forms:
+                    if item.cleaned_data.get("DELETE"):
+                        if item.instance.pk and item.instance.assignments.exists():
+                            raise ValidationError("Un créneau avec un historique d’affectations ne peut pas être supprimé. Retirez les affectations et désactivez le poste.")
+                    elif item.cleaned_data and item.instance.pk:
+                        item.instance.full_clean()
+                saved = form.save(commit=False)
+                saved.event = event
+                saved.save()
+                formset.instance = saved
+                formset.save()
+        except ValidationError as error:
+            for text in _form_error_messages(error):
+                form.add_error(None, text)
+        else:
+            messages.success(request, "Le poste et ses capacités ont été enregistrés.")
+            return redirect("event_detail", event_id=event.pk)
     return render(
         request,
         "volunteers/organizer/station_form.html",
@@ -556,11 +591,21 @@ def catering(request, event_id):
 def _priced_option_form(request, event_day, model, form_class, instance=None):
     form = form_class(request.POST or None, instance=instance)
     if request.method == "POST" and form.is_valid():
-        option = form.save(commit=False)
-        option.event_day = event_day
-        option.save()
-        messages.success(request, "L'option a été enregistrée.")
-        return redirect("catering", event_id=event_day.event_id)
+        try:
+            with transaction.atomic():
+                EventDay.objects.select_for_update().get(pk=event_day.pk)
+                if instance is not None:
+                    model.objects.select_for_update().get(pk=instance.pk)
+                option = form.save(commit=False)
+                option.event_day = event_day
+                option.full_clean()
+                option.save()
+        except ValidationError as error:
+            for text in _form_error_messages(error):
+                form.add_error(None, text)
+        else:
+            messages.success(request, "L'option a été enregistrée.")
+            return redirect("catering", event_id=event_day.event_id)
     return render(
         request,
         "volunteers/organizer/generic_form.html",
@@ -593,6 +638,7 @@ def meal_order_update(request, order_id):
                 menu=form.cleaned_data["menu"],
                 beverage=form.cleaned_data["beverage"],
                 no_meal=not form.cleaned_data["wants_meal"],
+                payment_method=form.cleaned_data["payment_method"],
                 actor=request.user,
             )
         except ValidationError as error:
@@ -784,3 +830,22 @@ def menu_update(request, menu_id):
 def beverage_update(request, beverage_id):
     beverage = get_object_or_404(Beverage.objects.select_related("event_day__event"), pk=beverage_id)
     return _priced_option_form(request, beverage.event_day, Beverage, BeverageForm, instance=beverage)
+
+
+@organizer_required
+def meal_order_create(request, registration_id):
+    registration = get_object_or_404(Registration.objects.select_related("event_day__event"), pk=registration_id, status=Registration.Status.ACTIVE)
+    existing = MealOrder.objects.filter(registration=registration).first()
+    if existing:
+        return redirect("meal_order_update", order_id=existing.pk)
+    form = MealOrderOrganizerForm(request.POST or None, instance=MealOrder(registration=registration), registration=registration)
+    if request.method == "POST" and form.is_valid():
+        try:
+            save_meal_order(registration=registration, menu=form.cleaned_data["menu"], beverage=form.cleaned_data["beverage"], no_meal=not form.cleaned_data["wants_meal"], payment_method=form.cleaned_data["payment_method"], actor=request.user)
+        except ValidationError as error:
+            for text in _form_error_messages(error):
+                form.add_error(None, text)
+        else:
+            messages.success(request, "La restauration du participant a été enregistrée.")
+            return redirect("recap_meals", event_id=registration.event_day.event_id)
+    return render(request, "volunteers/organizer/generic_form.html", {"form": form, "title": "Renseigner la restauration", "event": registration.event_day.event})

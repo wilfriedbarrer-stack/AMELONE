@@ -85,7 +85,7 @@ class AdministrationTests(DataMixin, TestCase):
         menu = Menu.objects.create(event_day=self.day, name="Ancien menu", surcharge_cents=0)
         self.client.force_login(self.organizer)
         response = self.client.post(reverse("menu_update", args=[menu.pk]), {
-            "name": "Menu végétarien", "description": "Légumes", "surcharge_euros": "2.50",
+            "name": "Menu végétarien", "description": "Légumes", "surcharge_euros": "2.50", "meal_type": "full_meal",
         })
         self.assertEqual(response.status_code, 302)
         menu.refresh_from_db()

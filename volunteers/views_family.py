@@ -25,12 +25,21 @@ from .forms_family import (
     MemberForm,
     SignUpForm,
 )
-from .models import Assignment, Attendance, Event, EventDay, Family, Member, Registration
+from .models import (
+    Assignment,
+    Attendance,
+    Event,
+    EventDay,
+    Family,
+    Member,
+    Registration,
+    SiteBranding,
+)
+from .participation import save_participation
 from .services import (
     cancel_registration,
     family_event_balance,
     save_meal_reservation,
-    save_registration,
 )
 
 
@@ -285,6 +294,8 @@ def family_event_detail(request, event_id):
             "balance": balance,
             "registration_is_open": event.registration_is_open(),
             "registration_not_started": timezone.now() < event.registration_opens_at,
+            "sumup_url": SiteBranding.objects.filter(pk=1).values_list("sumup_payment_url", flat=True).first() or event.sumup_payment_url or "",
+            "sumup_requested": any(order and order.payment_method == "sumup" for order in meal_orders.values()),
             "meal_orders_are_open": event.meal_orders_are_open(),
         },
     )
@@ -313,21 +324,24 @@ def family_registration_edit(request, event_day_id, member_id):
     )
     if request.method == "POST" and form.is_valid():
         try:
-            registration = save_registration(
+            registration = save_participation(
                 member=member,
                 event_day=event_day,
                 availability=form.cleaned_data["availability"],
                 preferred_station=form.cleaned_data["preferred_station"],
                 note=form.cleaned_data["note"],
                 actor=request.user,
-                actor_is_organizer=False,
+                meal_choices={
+                    "menu": form.cleaned_data["menu"], "beverage": form.cleaned_data["beverage"],
+                    "no_meal": form.cleaned_data["no_meal"], "payment_method": form.cleaned_data["payment_method"],
+                } if form.meal_choices_open else None,
             )
         except ValidationError as error:
             _report_validation_error(form, error)
         else:
             messages.success(
                 request,
-                "La disponibilité a été enregistrée. Le poste indiqué reste un souhait, "
+                "La présence et la restauration ont été enregistrées. Le poste indiqué reste un souhait, "
                 "pas une affectation confirmée.",
             )
             return redirect("family_event_detail", event_id=event_day.event_id)
@@ -412,6 +426,7 @@ def family_meal_edit(request, registration_id):
                 menu=form.cleaned_data["menu"],
                 drink=form.cleaned_data["beverage"],
                 no_meal=form.cleaned_data["no_meal"],
+                payment_method=form.cleaned_data["payment_method"],
                 actor=request.user,
                 actor_is_organizer=False,
             )

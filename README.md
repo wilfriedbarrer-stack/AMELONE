@@ -64,6 +64,7 @@ l'application après la première connexion.
 - [Déploiement](docs/deploiement.md)
 - [Import depuis Google Sheets](docs/import-google-sheets.md)
 - [Architecture et règles métier](docs/architecture.md)
+- [Profils réutilisables, restauration, imports et récapitulatifs](docs/profils-repas-imports.md)
 
 ## Limites explicites de cette version
 
@@ -101,3 +102,19 @@ Déploiement : installer les dépendances mises à jour, appliquer la migration
 `0002_sitebranding` et exécuter `collectstatic`. Le script Render effectue ces
 étapes automatiquement. Pour le premier administrateur, utiliser
 `createsuperuser` ou le compte initial créé par `bootstrap_admin`.
+
+
+## Profils, restauration et imports
+
+Dans Administration, enregistrez un profil réutilisable depuis un événement puis
+créez un nouveau brouillon à une autre date. La configuration des postes, menus et
+boissons est reprise sans copier les participants ni les paiements.
+
+Les présences et la restauration se remplissent ensemble : repas complet à la
+journée, collation à la demi-journée, boisson et préférence de paiement au comptoir
+ou via SumUp. Le lien commun se configure dans le règlement de l’association.
+Les postes acceptent désormais la période Journée.
+
+L’import CSV/Excel affiche un aperçu à valider. Les récapitulatifs des postes et
+de la restauration sont distincts, imprimables et exportables en CSV. Voir le
+[guide et les colonnes des fichiers](docs/profils-repas-imports.md).
