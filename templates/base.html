@@ -5,10 +5,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <meta name="theme-color" content="#173f35">
-  <title>{% block title %}AMELONE{% endblock %}</title>
-  <meta name="description" content="Gestion des bénévoles et des événements de l’association.">
-  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <meta name="theme-color" content="#12651c">
+  <title>{% block title %}AMELONE LOISIRS{% endblock %}</title>
+  <meta name="description" content="Gestion des bénévoles et des événements de l’association Amelone Loisirs.">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=amelone-loisirs-1">
   {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -16,9 +16,9 @@
   <header class="site-header">
     <div class="shell header-inner">
       {% url 'home' as home_url %}
-      <a class="brand" href="{{ home_url|default:'/' }}" aria-label="AMELONE — accueil">
+      <a class="brand" href="{{ home_url|default:'/' }}" aria-label="Amelone Loisirs — accueil">
         <span class="brand-mark" aria-hidden="true">A</span>
-        <span><strong>AMELONE</strong><small>Les bénévoles, bien accompagnés</small></span>
+        <span><strong>AMELONE LOISIRS</strong><small>Parents, grands-parents et cavaliers</small></span>
       </a>
 
       <nav class="primary-nav" aria-label="Navigation principale">
@@ -82,7 +82,7 @@
   <footer class="site-footer">
     <div class="shell footer-inner">
       <div>
-        <strong>AMELONE</strong>
+        <strong>AMELONE LOISIRS</strong>
         <p>Une organisation simple et respectueuse des données de chacun.</p>
       </div>
       <nav aria-label="Liens de pied de page">

@@ -60,6 +60,7 @@ moment de la création. Choisir un mot de passe long et unique, puis le modifier
 l'application après la première connexion.
 
 - [Configuration des emails](docs/emails.md)
+- [Charte graphique](docs/charte-graphique.md)
 - [Déploiement](docs/deploiement.md)
 - [Import depuis Google Sheets](docs/import-google-sheets.md)
 - [Architecture et règles métier](docs/architecture.md)
