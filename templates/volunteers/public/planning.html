@@ -4,7 +4,15 @@
 {% block content %}
   <header class="page-header public-header"><div class="shell header-copy"><div><span class="eyebrow">Planning public</span><h1>{% if event %}{{ event.name }}{% else %}Affectations confirmées{% endif %}</h1><p>{% if event %}{{ event.location }}{% else %}Choisissez un événement et une journée.{% endif %}</p></div></div></header>
   <div class="shell page-stack">
-    <form method="get" class="filter-bar planning-filters"><div class="field"><label for="event">Événement</label><select id="event" name="event"><option value="">Choisir</option>{% for option in events %}<option value="{{ option.pk }}"{% if event.pk == option.pk %} selected{% endif %}>{{ option.name }}</option>{% endfor %}</select></div><div class="field"><label for="day">Journée</label><select id="day" name="day"><option value="">Toutes les journées</option>{% for day in days %}<option value="{{ day.pk }}"{% if selected_day.pk == day.pk %} selected{% endif %}>{{ day.date|date:"l j F"|capfirst }}</option>{% endfor %}</select></div><button class="button button-primary" type="submit">Afficher</button></form>
+    <form method="get" action="{% url 'public_planning' %}" class="filter-bar planning-filters">
+      <div class="field"><label for="event">Événement</label><select id="event" name="event"><option value="">Choisir</option>{% for option in events %}<option value="{{ option.pk }}"{% if event.pk == option.pk %} selected{% endif %}>{{ option.name }}</option>{% endfor %}</select></div>
+      <button class="button button-primary" type="submit">Afficher l’événement</button>
+    </form>
+    {% if event %}<form method="get" action="{% url 'public_planning' %}" class="filter-bar planning-filters">
+      <input type="hidden" name="event" value="{{ event.pk }}">
+      <div class="field"><label for="day">Journée</label><select id="day" name="day">{% for day in days %}<option value="{{ day.pk }}"{% if selected_day.pk == day.pk %} selected{% endif %}>{{ day.date|date:"l j F"|capfirst }}</option>{% empty %}<option value="">Aucune journée précisée</option>{% endfor %}</select></div>
+      <button class="button button-primary" type="submit">Afficher la journée</button>
+    </form>{% endif %}
     <div class="privacy-note"><span aria-hidden="true">✓</span><p>Ce planning affiche uniquement les affectations confirmées. Les coordonnées, âges, repas et remarques restent privés.</p></div>
     {% if event %}
       <section class="planning-board" aria-label="Planning des postes">

@@ -229,11 +229,7 @@ def open_events(request):
     family = _family_for(request)
     now = timezone.now()
     events = (
-        Event.objects.filter(
-            status=Event.Status.PUBLISHED,
-            registration_opens_at__lte=now,
-            registration_closes_at__gte=now,
-        )
+        Event.objects.filter(status=Event.Status.PUBLISHED)
         .annotate(first_day=Min("days__date"))
         .prefetch_related("days")
         .order_by("first_day", "name")
@@ -241,7 +237,7 @@ def open_events(request):
     return render(
         request,
         "volunteers/family/event_list.html",
-        {"family": family, "events": events},
+        {"family": family, "events": events, "now": now},
     )
 
 
@@ -288,6 +284,7 @@ def family_event_detail(request, event_id):
             "meal_orders": meal_orders,
             "balance": balance,
             "registration_is_open": event.registration_is_open(),
+            "registration_not_started": timezone.now() < event.registration_opens_at,
             "meal_orders_are_open": event.meal_orders_are_open(),
         },
     )
