@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Mes membres — AMELONE{% endblock %}
+{% block content %}
+  <header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Espace famille</span><h1>Mes membres</h1><p>Ces profils restent disponibles d’une année sur l’autre.</p></div>{% url 'member_create' as create_url %}<a class="button button-primary" href="{{ create_url|default:'/famille/membres/ajouter/' }}">Ajouter un membre</a></div></header>
+  <div class="shell page-stack">
+    <div class="info-banner"><span aria-hidden="true">i</span><p>La date de naissance sert uniquement à calculer l’âge au jour de participation et les alertes anniversaire. Elle n’est jamais affichée sur le planning public.</p></div>
+    <section class="panel table-panel">
+      <div class="responsive-table">
+        <table><thead><tr><th scope="col">Membre</th><th scope="col">Date de naissance</th><th scope="col">Âge</th><th scope="col">Statut</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody>{% for member in members %}<tr><td data-label="Membre"><div class="identity"><span class="avatar" aria-hidden="true">{{ member.first_name|first }}{{ member.last_name|first }}</span><strong>{{ member.first_name }} {{ member.last_name }}</strong></div></td><td data-label="Date de naissance">{{ member.birth_date|date:"d/m/Y" }}</td><td data-label="Âge">{{ member.age|default:"—" }}{% if member.age != None %} ans{% endif %}</td><td data-label="Statut">{% if member.archived_at or not member.is_active %}<span class="badge badge-neutral">Archivé</span>{% else %}<span class="badge badge-success">Actif</span>{% endif %}</td><td class="table-actions">{% url 'member_update' member.pk as update_url %}<a href="{{ update_url|default:'#' }}">Modifier</a>{% if not member.archived_at and member.is_active != False %}{% url 'member_archive' member.pk as archive_url %}<a class="danger-link" href="{{ archive_url|default:'#' }}">Archiver</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="5"><div class="empty-state"><span class="empty-icon" aria-hidden="true">+</span><div><h3>Aucun membre pour le moment</h3><p>Ajoutez les personnes de votre famille qui souhaitent participer.</p></div></div></td></tr>{% endfor %}</tbody></table>
+      </div>
+    </section>
+  </div>
+{% endblock %}

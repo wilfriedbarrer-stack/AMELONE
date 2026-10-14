@@ -1,0 +1,96 @@
+{% load static %}
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#173f35">
+  <title>{% block title %}AMELONE{% endblock %}</title>
+  <meta name="description" content="Gestion des bénévoles et des événements de l’association.">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <a class="skip-link" href="#contenu">Aller au contenu</a>
+  <header class="site-header">
+    <div class="shell header-inner">
+      {% url 'home' as home_url %}
+      <a class="brand" href="{{ home_url|default:'/' }}" aria-label="AMELONE — accueil">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span><strong>AMELONE</strong><small>Les bénévoles, bien accompagnés</small></span>
+      </a>
+
+      <nav class="primary-nav" aria-label="Navigation principale">
+        {% if user.is_authenticated %}
+          {% if is_organizer %}
+            {% url 'organizer_dashboard' as organizer_dashboard_url %}
+            {% url 'event_list' as event_list_url %}
+            {% url 'assignment_board' as assignment_board_url %}
+            {% url 'annual_tracking' as annual_tracking_url %}
+            <a href="{{ organizer_dashboard_url|default:'/organisateur/' }}">Tableau de bord</a>
+            <a href="{{ event_list_url|default:'/organisateur/evenements/' }}">Événements</a>
+            <a href="{{ assignment_board_url|default:'/organisateur/affectations/' }}">Affectations</a>
+            <a href="{{ annual_tracking_url|default:'/organisateur/suivi/' }}">Suivi annuel</a>
+          {% else %}
+            {% url 'dashboard' as dashboard_url %}
+            {% url 'member_list' as member_list_url %}
+            {% url 'open_events' as open_events_url %}
+            {% url 'family_assignments' as family_assignments_url %}
+            <a href="{{ dashboard_url|default:'/famille/' }}">Mon espace</a>
+            <a href="{{ member_list_url|default:'/famille/membres/' }}">Membres</a>
+            <a href="{{ open_events_url|default:'/famille/evenements/' }}">Événements</a>
+            <a href="{{ family_assignments_url|default:'/famille/affectations/' }}">Affectations</a>
+          {% endif %}
+        {% else %}
+          {% url 'public_events' as public_events_url %}
+          {% url 'public_planning' as public_planning_url %}
+          <a href="{{ public_events_url|default:'/evenements/' }}">Événements</a>
+          <a href="{{ public_planning_url|default:'/planning/' }}">Planning public</a>
+        {% endif %}
+      </nav>
+
+      <div class="account-actions">
+        {% if user.is_authenticated %}
+          <span class="user-label">{{ user.first_name|default:user.email }}</span>
+          <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button class="button button-quiet button-small" type="submit">Se déconnecter</button>
+          </form>
+        {% else %}
+          <a class="button button-quiet button-small" href="{% url 'login' %}">Connexion</a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  {% if messages %}
+    <div class="shell flash-stack" aria-live="polite" aria-atomic="true">
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }}" role="status">
+          <span class="alert-icon" aria-hidden="true"></span>
+          <div>{{ message }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <main id="contenu" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-inner">
+      <div>
+        <strong>AMELONE</strong>
+        <p>Une organisation simple et respectueuse des données de chacun.</p>
+      </div>
+      <nav aria-label="Liens de pied de page">
+        {% url 'public_planning' as footer_planning_url %}
+        <a href="{{ footer_planning_url|default:'/planning/' }}">Planning public</a>
+        {% if not user.is_authenticated %}<a href="{% url 'login' %}">Espace famille</a>{% endif %}
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

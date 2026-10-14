@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Repas — {{ event.name }} — AMELONE{% endblock %}
+{% block content %}
+  <header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Repas et boissons</span><h1>{{ event.name }}</h1><p>Choisissez un repas pour chaque membre et chaque jour de participation.</p></div><div class="deadline-card"><span>Clôture des repas</span><strong>{{ event.meal_closes_at|date:"d/m/Y à H\hi"|default:"À préciser" }}</strong></div></div></header>
+  <form method="post" class="shell page-stack">{% csrf_token %}
+    {% if locked %}<div class="alert alert-warning" role="alert"><strong>Les réservations sont closes.</strong> Contactez l’organisation pour demander une correction.</div>{% endif %}
+    {{ formset.management_form }}
+    {% for form in formset %}<section class="panel meal-choice-card"><div class="panel-heading"><div><span class="eyebrow">{{ form.instance.event_day.date|date:"l j F Y"|capfirst }}</span><h2>{{ form.instance.member }}</h2></div>{% if form.instance.pk %}<span class="badge badge-neutral">Choix enregistré</span>{% endif %}</div>{% include "partials/form_fields.html" with form=form %}{% if form.instance.applied_total_cents %}<div class="line-total"><span>Supplément conservé pour cette réservation</span><strong>{{ form.instance.applied_total_display|default:form.instance.applied_total_cents }} €</strong></div>{% endif %}</section>{% empty %}<div class="empty-state panel"><h2>Aucun repas à réserver</h2><p>Il faut d’abord enregistrer une disponibilité pour au moins une journée.</p></div>{% endfor %}
+    {% if form %}<section class="panel">{% include "partials/form_fields.html" %}</section>{% endif %}
+    <div class="sticky-actions"><div><small>Total estimé</small><strong>{{ total_display|default:"Calculé à la validation" }}</strong></div>{% url 'family_event_detail' event.pk as back_url %}<a class="button button-quiet" href="{{ back_url|default:'#' }}">Annuler</a><button class="button button-primary" type="submit"{% if locked %} disabled{% endif %}>Enregistrer les repas</button></div>
+  </form>
+{% endblock %}

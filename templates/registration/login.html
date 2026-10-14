@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Connexion — AMELONE{% endblock %}
+{% block content %}
+  <div class="auth-layout shell">
+    <section class="auth-card">
+      <span class="eyebrow">Espace sécurisé</span>
+      <h1>Heureux de vous revoir.</h1>
+      <p class="muted">Connectez-vous avec l’adresse email du responsable de famille.</p>
+      <form method="post" class="stack-form" novalidate>
+        {% csrf_token %}
+        {% include "partials/form_fields.html" %}
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        <button class="button button-primary button-block" type="submit">Se connecter</button>
+      </form>
+      <div class="auth-links">
+        <a href="{% url 'password_reset' %}">Mot de passe oublié&nbsp;?</a>
+        {% url 'signup' as signup_url %}
+        <span>Pas encore de compte&nbsp;? <a href="{{ signup_url|default:'/inscription/' }}">Créer un compte famille</a></span>
+      </div>
+    </section>
+    <aside class="auth-aside">
+      <blockquote>« Une organisation fluide laisse plus de place à l’essentiel&nbsp;: être ensemble. »</blockquote>
+      <p>Vos informations sont privées et accessibles uniquement à votre famille et aux organisateurs autorisés.</p>
+    </aside>
+  </div>
+{% endblock %}

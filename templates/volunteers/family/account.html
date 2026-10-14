@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Mon compte — AMELONE{% endblock %}
+{% block content %}
+  <header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Espace famille</span><h1>Mon compte</h1><p>Coordonnées du responsable de la famille.</p></div></div></header>
+  <div class="shell narrow-content page-stack">
+    <section class="panel">
+      <form method="post" class="stack-form" novalidate>{% csrf_token %}{% include "partials/form_fields.html" %}<div class="form-actions"><a class="button button-quiet" href="{% url 'dashboard' %}">Annuler</a><button class="button button-primary" type="submit">Enregistrer les modifications</button></div></form>
+    </section>
+    <section class="panel subtle-panel"><h2>Sécurité du compte</h2><p>Utilisez un mot de passe unique et gardez votre adresse email à jour pour pouvoir récupérer votre accès.</p>{% url 'password_change' as password_change_url %}{% if password_change_url %}<a class="button button-secondary" href="{{ password_change_url }}">Modifier mon mot de passe</a>{% endif %}</section>
+  </div>
+{% endblock %}

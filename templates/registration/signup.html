@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Créer un compte famille — AMELONE{% endblock %}
+{% block content %}
+  <div class="auth-layout shell">
+    <section class="auth-card auth-card-wide">
+      <span class="eyebrow">Bienvenue</span>
+      <h1>Créer votre compte famille</h1>
+      <p class="muted">Le responsable pourra ensuite ajouter tous les membres de la famille.</p>
+      <form method="post" class="stack-form" novalidate>
+        {% csrf_token %}
+        {% include "partials/form_fields.html" %}
+        <button class="button button-primary button-block" type="submit">Créer mon compte</button>
+      </form>
+      <p class="auth-links">Déjà inscrit&nbsp;? <a href="{% url 'login' %}">Se connecter</a></p>
+    </section>
+    <aside class="auth-aside"><h2>Un compte, toute la famille</h2><p>Les profils et l’historique sont conservés d’une année sur l’autre. Vous gardez la main sur vos informations.</p></aside>
+  </div>
+{% endblock %}

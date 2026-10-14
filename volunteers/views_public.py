@@ -1,0 +1,137 @@
+"""Pages publiques, composées exclusivement de données publiables."""
+
+from django.core.exceptions import ValidationError
+from django.db.models import Min, Prefetch, Q
+from django.http import Http404
+from django.shortcuts import get_object_or_404, render
+from django.utils import timezone
+
+from .models import Assignment, Event, EventDay, Registration, StationSlot
+
+
+def _published_events():
+    return Event.objects.filter(status=Event.Status.PUBLISHED).prefetch_related("days")
+
+
+def _event_from_public_id(value):
+    try:
+        return get_object_or_404(Event, pk=value, status=Event.Status.PUBLISHED)
+    except (ValidationError, ValueError, TypeError) as exc:
+        raise Http404("Cet événement public n'existe pas.") from exc
+
+
+def home(request):
+    upcoming_events = (
+        _published_events()
+        .filter(Q(days__date__gte=timezone.localdate()) | Q(days__isnull=True))
+        .annotate(first_day=Min("days__date"))
+        .order_by("first_day", "name")[:6]
+    )
+    return render(
+        request,
+        "volunteers/home.html",
+        {"upcoming_events": upcoming_events},
+    )
+
+
+def public_events(request):
+    events = _published_events().annotate(first_day=Min("days__date")).order_by("first_day", "name")
+    return render(
+        request,
+        "volunteers/public/event_list.html",
+        {"events": events},
+    )
+
+
+def public_planning(request, event_id=None, day_id=None):
+    """Affiche uniquement les affectations confirmées, sans objet privé en contexte."""
+
+    events = _published_events().annotate(first_day=Min("days__date")).order_by("first_day", "name")
+    event = None
+    if event_id is not None:
+        event = _event_from_public_id(event_id)
+    elif request.GET.get("event"):
+        event = _event_from_public_id(request.GET["event"])
+    else:
+        event = events.filter(days__date__gte=timezone.localdate()).order_by("days__date").first()
+        if event is None:
+            event = events.first()
+
+    days = EventDay.objects.none()
+    selected_day = None
+    rows = []
+    if event is not None:
+        days = event.days.all().order_by("date")
+        requested_day_id = day_id or request.GET.get("day")
+        if requested_day_id:
+            try:
+                selected_day = get_object_or_404(days, pk=requested_day_id)
+            except (ValidationError, ValueError, TypeError) as exc:
+                raise Http404("Cette journée publique n'existe pas.") from exc
+        else:
+            selected_day = days.filter(date__gte=timezone.localdate()).first() or days.first()
+
+    if selected_day is not None:
+        confirmed = Assignment.objects.filter(
+            status=Assignment.Status.CONFIRMED,
+            registration__status=Registration.Status.ACTIVE,
+        ).select_related("registration__member")
+        slots = (
+            StationSlot.objects.filter(
+                event_day=selected_day,
+                station__is_active=True,
+            )
+            .select_related("station")
+            .prefetch_related(
+                Prefetch("assignments", queryset=confirmed, to_attr="confirmed_assignments")
+            )
+            .order_by("period", "station__position", "station__name")
+        )
+        for slot in slots:
+            names = sorted(
+                assignment.registration.member.full_name
+                for assignment in slot.confirmed_assignments
+            )
+            taken = len(names)
+            if slot.start_time and slot.end_time:
+                schedule = f"{slot.start_time:%H:%M}–{slot.end_time:%H:%M}"
+            else:
+                schedule = slot.get_period_display()
+            # Ne jamais placer les objets Assignment/Registration/Member dans
+            # ce contexte : seuls les noms explicitement publiables subsistent.
+            rows.append(
+                {
+                    "slot_id": slot.pk,
+                    "station_name": slot.station.name,
+                    "station_category": slot.station.get_category_display(),
+                    "category": slot.station.category,
+                    "category_label": slot.station.get_category_display(),
+                    "name": slot.station.name,
+                    "description": slot.station.description,
+                    "period": slot.get_period_display(),
+                    "schedule": schedule,
+                    "time_label": schedule,
+                    "names": names,
+                    "people": names,
+                    "capacity": slot.capacity,
+                    "taken": taken,
+                    "remaining": max(slot.capacity - taken, 0),
+                    "is_full": taken >= slot.capacity,
+                    "fill_percent": min(round(taken * 100 / slot.capacity), 100)
+                    if slot.capacity
+                    else 100,
+                }
+            )
+
+    return render(
+        request,
+        "volunteers/public/planning.html",
+        {
+            "events": events,
+            "event": event,
+            "days": days,
+            "selected_day": selected_day,
+            "rows": rows,
+        },
+    )
+

@@ -1,0 +1,7 @@
+<nav class="workspace-nav" aria-label="Navigation organisateur">
+  {% url 'organizer_dashboard' as dash_url %}<a href="{{ dash_url|default:'/organisateur/' }}"{% if organizer_section == 'dashboard' %} aria-current="page"{% endif %}>Vue d’ensemble</a>
+  {% url 'event_list' as events_url %}<a href="{{ events_url|default:'/organisateur/evenements/' }}"{% if organizer_section == 'events' %} aria-current="page"{% endif %}>Événements</a>
+  {% url 'assignment_board' as assignment_url %}<a href="{{ assignment_url|default:'/organisateur/affectations/' }}"{% if organizer_section == 'assignments' %} aria-current="page"{% endif %}>Affectations</a>
+  {% url 'catering_dashboard' as catering_url %}<a href="{{ catering_url|default:'/organisateur/repas/' }}"{% if organizer_section == 'catering' %} aria-current="page"{% endif %}>Repas</a>
+  {% url 'annual_tracking' as tracking_url %}<a href="{{ tracking_url|default:'/organisateur/suivi/' }}"{% if organizer_section == 'tracking' %} aria-current="page"{% endif %}>Suivi annuel</a>
+</nav>

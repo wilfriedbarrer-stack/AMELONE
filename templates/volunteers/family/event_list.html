@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Événements ouverts — AMELONE{% endblock %}
+{% block content %}
+  <header class="page-header page-header-family"><div class="shell header-copy"><div><span class="eyebrow">Participer</span><h1>Événements ouverts</h1><p>Déclarez les disponibilités de chaque membre. Un souhait de poste ne vaut pas affectation.</p></div></div></header>
+  <div class="shell page-stack">
+    <div class="legend" aria-label="Comprendre les statuts"><div><span class="legend-dot dot-availability"></span><strong>Disponibilité</strong><small>Vous indiquez quand vous pouvez venir.</small></div><div><span class="legend-dot dot-wish"></span><strong>Souhait</strong><small>Une préférence, sans réservation de place.</small></div><div><span class="legend-dot dot-confirmed"></span><strong>Affectation</strong><small>Le poste confirmé par l’organisation.</small></div></div>
+    <div class="card-grid">
+      {% for event in events %}<article class="event-card"><div class="event-card-top"><div class="split-line"><span class="badge badge-open">Ouvert</span>{% if event.registration_closes_at %}<small>jusqu’au {{ event.registration_closes_at|date:"d/m à H\hi" }}</small>{% endif %}</div><h2>{{ event.name }}</h2><p>{{ event.description|truncatewords:30 }}</p></div><dl class="meta-list"><div><dt>Lieu</dt><dd>{{ event.location|default:"À préciser" }}</dd></div><div><dt>Dates</dt><dd>{{ event.date_summary|default:"Consulter le détail" }}</dd></div></dl>{% url 'family_event_detail' event.pk as detail_url %}<a class="button button-primary button-block" href="{{ detail_url|default:'#' }}">Gérer les participations</a></article>{% empty %}<div class="empty-state panel full-span"><span class="empty-icon" aria-hidden="true">○</span><div><h2>Aucun événement ouvert</h2><p>Les prochains événements publiés apparaîtront ici.</p></div></div>{% endfor %}
+    </div>
+  </div>
+{% endblock %}

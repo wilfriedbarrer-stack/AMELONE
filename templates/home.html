@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}AMELONE — Organiser les bénévoles simplement{% endblock %}
+{% block body_class %}public-page{% endblock %}
+{% block content %}
+  <section class="hero">
+    <div class="shell hero-grid">
+      <div class="hero-copy">
+        <span class="eyebrow">Vie associative</span>
+        <h1>Chaque bonne volonté<br>trouve sa place.</h1>
+        <p class="lead">Disponibilités, affectations et repas réunis dans un espace clair pour les familles, les bénévoles et l’équipe organisatrice.</p>
+        <div class="button-row">
+          {% if user.is_authenticated %}
+            {% url 'dashboard' as dashboard_url %}
+            {% url 'organizer_dashboard' as organizer_dashboard_url %}
+            <a class="button button-primary" href="{% if is_organizer %}{{ organizer_dashboard_url|default:'/organisateur/' }}{% else %}{{ dashboard_url|default:'/famille/' }}{% endif %}">Accéder à mon espace</a>
+          {% else %}
+            {% url 'signup' as signup_url %}
+            <a class="button button-primary" href="{{ signup_url|default:'/inscription/' }}">Créer un compte famille</a>
+            <a class="button button-secondary" href="{% url 'login' %}">Se connecter</a>
+          {% endif %}
+        </div>
+      </div>
+      <aside class="hero-card" aria-label="Comment ça marche">
+        <p class="kicker">En trois temps</p>
+        <ol class="steps">
+          <li><span>1</span><div><strong>Indiquez vos disponibilités</strong><small>Journée, matin ou après-midi</small></div></li>
+          <li><span>2</span><div><strong>L’organisation affecte les postes</strong><small>Selon les besoins et vos souhaits</small></div></li>
+          <li><span>3</span><div><strong>Consultez la confirmation</strong><small>Poste, horaires et consignes à jour</small></div></li>
+        </ol>
+      </aside>
+    </div>
+  </section>
+
+  <section class="section shell">
+    <div class="section-heading">
+      <span class="eyebrow">À chacun son espace</span>
+      <h2>Tout ce qu’il faut, rien de plus.</h2>
+    </div>
+    <div class="feature-grid">
+      <article class="feature-card"><span class="feature-icon" aria-hidden="true">F</span><h3>Pour les familles</h3><p>Gérez tous les membres, les disponibilités, les repas et l’historique depuis un seul compte.</p></article>
+      <article class="feature-card"><span class="feature-icon" aria-hidden="true">O</span><h3>Pour l’organisation</h3><p>Répartissez les postes, suivez les capacités et communiquez les confirmations sans doublon.</p></article>
+      <article class="feature-card"><span class="feature-icon" aria-hidden="true">P</span><h3>Pour le public</h3><p>Retrouvez le planning confirmé et les places restantes, sans exposer aucune donnée privée.</p></article>
+    </div>
+  </section>
+
+  <section class="section section-tint">
+    <div class="shell cta-band">
+      <div><span class="eyebrow">Planning public</span><h2>Qui fait quoi, et quand&nbsp;?</h2><p>Le planning publié reste accessible à tous, y compris sur téléphone.</p></div>
+      {% url 'public_planning' as public_planning_url %}
+      <a class="button button-primary" href="{{ public_planning_url|default:'/planning/' }}">Voir le planning</a>
+    </div>
+  </section>
+{% endblock %}

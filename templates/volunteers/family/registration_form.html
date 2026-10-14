@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}Déclarer une disponibilité — AMELONE{% endblock %}
+{% block content %}
+  <header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Disponibilité</span><h1>{{ member.first_name }} {{ member.last_name }}</h1><p>{{ event_day.event.name|default:event.name }} · {{ event_day.date|date:"l j F Y"|capfirst }}</p></div></div></header>
+  <div class="shell narrow-content page-stack"><div class="info-banner"><span aria-hidden="true">i</span><p>Le poste souhaité est une préférence facultative. Seule une affectation confirmée réserve une place.</p></div><section class="panel"><form method="post" class="stack-form" novalidate>{% csrf_token %}{% include "partials/form_fields.html" %}<div class="form-actions">{% url 'family_event_detail' event_day.event.pk as back_url %}<a class="button button-quiet" href="{{ back_url|default:'#' }}">Annuler</a><button class="button button-primary" type="submit">Enregistrer la disponibilité</button></div></form></section></div>
+{% endblock %}

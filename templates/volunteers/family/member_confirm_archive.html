@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}Archiver un membre — AMELONE{% endblock %}
+{% block content %}<div class="shell narrow-page"><section class="panel state-card"><span class="state-icon state-warning" aria-hidden="true">!</span><h1>Archiver {{ object.first_name }} {{ object.last_name }}&nbsp;?</h1><p>Le membre ne pourra plus être inscrit à de nouveaux événements. Son historique et ses anciennes participations seront conservés.</p><form method="post" class="button-row centered">{% csrf_token %}{% url 'member_list' as list_url %}<a class="button button-quiet" href="{{ list_url|default:'/famille/membres/' }}">Annuler</a><button class="button button-danger" type="submit">Confirmer l’archivage</button></form></section></div>{% endblock %}

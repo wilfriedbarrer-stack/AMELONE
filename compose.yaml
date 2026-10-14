@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: amelone
+      POSTGRES_USER: amelone
+      POSTGRES_PASSWORD: amelone
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U amelone -d amelone"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  web:
+    build: .
+    environment:
+      DJANGO_SECRET_KEY: development-only-compose-key
+      DJANGO_DEBUG: "1"
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      DATABASE_URL: postgresql://amelone:amelone@db:5432/amelone
+      SITE_URL: http://localhost:8000
+      EMAIL_ENABLED: "0"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >-
+      sh -c "python manage.py migrate &&
+      gunicorn amelone.wsgi:application --bind 0.0.0.0:8000 --workers 3 --access-logfile -"
+
+volumes:
+  postgres_data:
+

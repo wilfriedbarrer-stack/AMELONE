@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title|default:"Modifier" }} — AMELONE{% endblock %}
+{% block content %}
+  <header class="organizer-header compact-header"><div class="shell"><div class="header-copy"><div><span class="eyebrow">{{ eyebrow|default:"Organisation" }}</span><h1>{{ page_title|default:"Modifier" }}</h1>{% if page_subtitle %}<p>{{ page_subtitle }}</p>{% endif %}</div></div>{% include "organizer/_nav.html" with organizer_section=organizer_section %}</div></header>
+  <div class="shell narrow-content page-stack">{% if notice %}<div class="info-banner"><span aria-hidden="true">i</span><p>{{ notice }}</p></div>{% endif %}<section class="panel"><form method="post" class="stack-form{% if form_grid %} form-grid{% endif %}" novalidate{% if multipart %} enctype="multipart/form-data"{% endif %}>{% csrf_token %}{% include "partials/form_fields.html" %}<div class="form-actions{% if form_grid %} full-span{% endif %}"><a class="button button-quiet" href="{{ cancel_url|default:'javascript:history.back()' }}">Annuler</a><button class="button button-primary" type="submit">{{ submit_label|default:"Enregistrer" }}</button></div></form></section></div>
+{% endblock %}

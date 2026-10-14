@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Événements publiés — AMELONE{% endblock %}
+{% block body_class %}public-page{% endblock %}
+{% block content %}
+  <header class="page-header public-header"><div class="shell header-copy"><div><span class="eyebrow">Ouvert à tous</span><h1>Événements publiés</h1><p>Découvrez les prochaines rencontres et consultez leur planning confirmé.</p></div></div></header>
+  <div class="shell page-stack"><div class="card-grid">{% for event in events %}<article class="event-card"><div class="event-card-top"><span class="badge badge-open">Publié</span><h2>{{ event.name }}</h2><p>{{ event.description|truncatewords:35 }}</p></div><dl class="meta-list"><div><dt>Lieu</dt><dd>{{ event.location|default:"À préciser" }}</dd></div><div><dt>Dates</dt><dd>{{ event.date_summary|default:"Voir le planning" }}</dd></div></dl>{% url 'public_planning' event.pk as planning_url %}<a class="button button-secondary button-block" href="{{ planning_url|default:'/planning/' }}">Consulter le planning</a></article>{% empty %}<div class="empty-state panel full-span"><span class="empty-icon" aria-hidden="true">○</span><div><h2>Aucun événement publié</h2><p>Revenez bientôt pour découvrir les prochaines dates.</p></div></div>{% endfor %}</div></div>
+{% endblock %}

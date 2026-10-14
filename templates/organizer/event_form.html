@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}{% if object %}Modifier {{ object.name }}{% else %}Créer un événement{% endif %} — AMELONE{% endblock %}
+{% block content %}
+  <header class="organizer-header compact-header"><div class="shell"><div class="header-copy"><div><span class="eyebrow">Événements</span><h1>{% if object %}Modifier l’événement{% else %}Créer un événement{% endif %}</h1><p>Les dates sont interprétées dans le fuseau Europe/Paris.</p></div></div>{% include "organizer/_nav.html" with organizer_section="events" %}</div></header>
+  <div class="shell narrow-content page-stack"><div class="info-banner"><span aria-hidden="true">i</span><p>Un brouillon reste invisible au public. Les clôtures des disponibilités et des repas sont indépendantes.</p></div><section class="panel"><form method="post" class="stack-form form-grid" novalidate>{% csrf_token %}{% include "partials/form_fields.html" %}<div class="form-actions full-span">{% url 'event_list' as list_url %}<a class="button button-quiet" href="{{ list_url|default:'/organisateur/evenements/' }}">Annuler</a><button class="button button-primary" type="submit">{% if object %}Enregistrer{% else %}Créer l’événement{% endif %}</button></div></form></section></div>
+{% endblock %}

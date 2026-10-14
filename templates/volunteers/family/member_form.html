@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}{% if object %}Modifier un membre{% else %}Ajouter un membre{% endif %} — AMELONE{% endblock %}
+{% block content %}
+  <header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Membres de la famille</span><h1>{% if object %}Modifier {{ object.first_name }}{% else %}Ajouter un membre{% endif %}</h1><p>Les informations demandées permettent d’organiser les participations en toute sécurité.</p></div></div></header>
+  <div class="shell narrow-content page-stack"><section class="panel"><form method="post" class="stack-form" novalidate>{% csrf_token %}{% include "partials/form_fields.html" %}<div class="form-actions">{% url 'member_list' as list_url %}<a class="button button-quiet" href="{{ list_url|default:'/famille/membres/' }}">Annuler</a><button class="button button-primary" type="submit">{% if object %}Enregistrer{% else %}Ajouter le membre{% endif %}</button></div></form></section></div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Mon espace famille — AMELONE{% endblock %}
+{% block content %}
+  <header class="page-header page-header-family">
+    <div class="shell header-copy">
+      <div><span class="eyebrow">Espace famille</span><h1>Bonjour {{ user.first_name|default:"à vous" }}&nbsp;!</h1><p>Retrouvez en un coup d’œil les prochaines étapes pour votre famille.</p></div>
+      {% url 'open_events' as open_events_url %}<a class="button button-primary" href="{{ open_events_url|default:'/famille/evenements/' }}">Voir les événements ouverts</a>
+    </div>
+  </header>
+  <div class="shell page-stack">
+    <section class="stat-grid" aria-label="Résumé de votre espace">
+      <article class="stat-card"><span class="stat-value">{{ members|length|default:"0" }}</span><span class="stat-label">membre{{ members|length|pluralize }}</span></article>
+      <article class="stat-card"><span class="stat-value">{{ open_events|length|default:"0" }}</span><span class="stat-label">événement{{ open_events|length|pluralize }} ouvert{{ open_events|length|pluralize }}</span></article>
+      <article class="stat-card"><span class="stat-value">{{ next_assignments|length|default:"0" }}</span><span class="stat-label">affectation{{ next_assignments|length|pluralize }} à venir</span></article>
+    </section>
+
+    <div class="content-grid content-grid-main">
+      <section class="panel">
+        <div class="panel-heading"><div><span class="eyebrow">À venir</span><h2>Prochaines affectations</h2></div>{% url 'family_assignments' as assignments_url %}<a href="{{ assignments_url|default:'/famille/affectations/' }}">Tout voir</a></div>
+        <div class="item-list">
+          {% for assignment in next_assignments %}
+            <article class="list-item">
+              <div class="date-tile"><strong>{{ assignment.station_slot.event_day.date|date:"d" }}</strong><span>{{ assignment.station_slot.event_day.date|date:"M" }}</span></div>
+              <div class="item-main"><h3>{{ assignment.registration.member.full_name }}</h3><p>{{ assignment.station_slot.event_day.event.name }} · {{ assignment.station_slot.station.name }}</p><small>{% if assignment.station_slot.start_time %}{{ assignment.station_slot.start_time|time:"H:i" }}–{{ assignment.station_slot.end_time|time:"H:i" }}{% else %}{{ assignment.get_period_display }}{% endif %}</small></div>
+              <span class="badge badge-success">Confirmée</span>
+            </article>
+          {% empty %}
+            <div class="empty-state compact"><span class="empty-icon" aria-hidden="true">○</span><div><h3>Aucune affectation à venir</h3><p>Les postes confirmés apparaîtront ici.</p></div></div>
+          {% endfor %}
+        </div>
+      </section>
+      <aside class="panel">
+        <div class="panel-heading"><div><span class="eyebrow">Famille</span><h2>Vos membres</h2></div>{% url 'member_create' as member_create_url %}<a class="button button-small button-secondary" href="{{ member_create_url|default:'/famille/membres/ajouter/' }}">Ajouter</a></div>
+        <div class="avatar-list">
+          {% for member in members %}
+            <div class="avatar-row"><span class="avatar" aria-hidden="true">{{ member.first_name|first }}{{ member.last_name|first }}</span><div><strong>{{ member.first_name }} {{ member.last_name }}</strong><small>{% if member.age != None %}{{ member.age }} ans{% else %}Profil enregistré{% endif %}</small></div></div>
+          {% empty %}<p class="muted">Ajoutez une première personne pour participer aux événements.</p>{% endfor %}
+        </div>
+        {% url 'member_list' as member_list_url %}<a class="button button-quiet button-block" href="{{ member_list_url|default:'/famille/membres/' }}">Gérer les membres</a>
+      </aside>
+    </div>
+
+    {% if open_events %}
+      <section>
+        <div class="section-heading inline-heading"><div><span class="eyebrow">Inscriptions</span><h2>Événements ouverts</h2></div></div>
+        <div class="card-grid">
+          {% for event in open_events|slice:":3" %}
+            <article class="event-card"><div class="event-card-top"><span class="badge badge-open">Inscriptions ouvertes</span><h3>{{ event.name }}</h3><p>{{ event.description|truncatewords:22 }}</p></div><dl class="meta-list"><div><dt>Lieu</dt><dd>{{ event.location }}</dd></div><div><dt>Dates</dt><dd>{{ event.date_summary|default:"À consulter" }}</dd></div></dl>{% url 'family_event_detail' event.pk as event_url %}<a class="button button-secondary button-block" href="{{ event_url|default:'#' }}">Consulter et s’inscrire</a></article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}

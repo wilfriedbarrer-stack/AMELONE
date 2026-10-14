@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Planning public{% if event %} — {{ event.name }}{% endif %} — AMELONE{% endblock %}
+{% block body_class %}public-page{% endblock %}
+{% block content %}
+  <header class="page-header public-header"><div class="shell header-copy"><div><span class="eyebrow">Planning public</span><h1>{% if event %}{{ event.name }}{% else %}Affectations confirmées{% endif %}</h1><p>{% if event %}{{ event.location }}{% else %}Choisissez un événement et une journée.{% endif %}</p></div></div></header>
+  <div class="shell page-stack">
+    <form method="get" class="filter-bar planning-filters"><div class="field"><label for="event">Événement</label><select id="event" name="event"><option value="">Choisir</option>{% for option in events %}<option value="{{ option.pk }}"{% if event.pk == option.pk %} selected{% endif %}>{{ option.name }}</option>{% endfor %}</select></div><div class="field"><label for="day">Journée</label><select id="day" name="day"><option value="">Toutes les journées</option>{% for day in days %}<option value="{{ day.pk }}"{% if selected_day.pk == day.pk %} selected{% endif %}>{{ day.date|date:"l j F"|capfirst }}</option>{% endfor %}</select></div><button class="button button-primary" type="submit">Afficher</button></form>
+    <div class="privacy-note"><span aria-hidden="true">✓</span><p>Ce planning affiche uniquement les affectations confirmées. Les coordonnées, âges, repas et remarques restent privés.</p></div>
+    {% if event %}
+      <section class="planning-board" aria-label="Planning des postes">
+        {% for row in rows %}<article class="planning-row{% if row.is_full %} is-full{% endif %}"><div class="planning-role"><div><span class="badge badge-{{ row.category }}">{{ row.category_label }}</span><h2>{{ row.name }}</h2>{% if row.description %}<p>{{ row.description }}</p>{% endif %}</div></div><div class="planning-slot"><strong>{{ row.time_label }}</strong></div><div class="planning-people">{% for person in row.people %}<span class="person-chip">{{ person }}</span>{% empty %}<span class="muted">Personne confirmée</span>{% endfor %}</div><div class="capacity"><strong>{{ row.taken }} / {{ row.capacity }}</strong><span>{% if row.is_full %}Complet{% else %}{{ row.remaining }} place{{ row.remaining|pluralize }} restante{{ row.remaining|pluralize }}{% endif %}</span><span class="capacity-bar" aria-hidden="true"><i style="width: {{ row.fill_percent }}%"></i></span></div></article>{% empty %}<div class="empty-state panel"><span class="empty-icon" aria-hidden="true">○</span><div><h2>Le planning n’est pas encore publié</h2><p>Les postes complets comme disponibles apparaîtront dès confirmation.</p></div></div>{% endfor %}
+      </section>
+    {% else %}<div class="empty-state panel"><span class="empty-icon" aria-hidden="true">↓</span><div><h2>Sélectionnez un événement</h2><p>Utilisez les filtres ci-dessus pour afficher les postes et les personnes confirmées.</p></div></div>{% endif %}
+  </div>
+{% endblock %}

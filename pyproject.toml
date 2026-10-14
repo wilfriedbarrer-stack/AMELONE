@@ -1,0 +1,36 @@
+[project]
+name = "amelone"
+version = "1.0.0"
+description = "Gestion annuelle des bénévoles, affectations et repas d'une association"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "dj-database-url==2.3.0",
+  "django==5.2.7",
+  "gunicorn==23.0.0",
+  "psycopg[binary]==3.2.12",
+  "whitenoise==6.11.0",
+]
+
+[dependency-groups]
+dev = [
+  "coverage==7.11.0",
+  "ruff==0.14.3",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.coverage.run]
+source = ["volunteers"]
+omit = ["*/migrations/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+

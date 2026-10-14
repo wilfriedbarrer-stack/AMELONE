@@ -1,0 +1,20 @@
+{% if form.non_field_errors %}
+  <div class="alert alert-error" role="alert">
+    <strong>Le formulaire contient une erreur.</strong>
+    {{ form.non_field_errors }}
+  </div>
+{% endif %}
+{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+{% for field in form.visible_fields %}
+  <div class="field{% if field.errors %} field-error{% endif %}{% if field.field.widget.input_type == 'checkbox' %} field-checkbox{% endif %}">
+    {% if field.field.widget.input_type == 'checkbox' %}
+      {{ field }}
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+    {% else %}
+      <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="required" aria-label="obligatoire"> *</span>{% endif %}</label>
+      {{ field }}
+    {% endif %}
+    {% if field.help_text %}<div class="help-text" id="{{ field.id_for_label }}_help">{{ field.help_text|safe }}</div>{% endif %}
+    {% if field.errors %}<div class="field-errors" id="{{ field.id_for_label }}_errors">{{ field.errors }}</div>{% endif %}
+  </div>
+{% endfor %}
