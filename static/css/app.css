@@ -323,7 +323,7 @@ tbody tr:hover { background: #fcfdfc; }
 .pagination > :last-child { justify-self: end; }
 
 /* Public planning */
-.planning-filters { position: relative; z-index: 2; margin-top: -3.4rem; box-shadow: var(--shadow-md); }
+.planning-filters { position: relative; z-index: 2; margin-top: 0; box-shadow: var(--shadow-md); }
 .planning-board { display: grid; gap: .7rem; }
 .planning-row { display: grid; grid-template-columns: minmax(13rem, 1.1fr) minmax(8rem, .55fr) minmax(14rem, 1.4fr) 9rem; align-items: center; gap: 1rem; padding: 1.15rem; border: 1px solid var(--line); border-left: .25rem solid var(--success); border-radius: var(--radius); background: #fff; box-shadow: var(--shadow-sm); }
 .planning-row.is-full { border-left-color: var(--gold); }
