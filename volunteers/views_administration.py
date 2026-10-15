@@ -10,7 +10,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from PIL import Image, UnidentifiedImageError
 
-from .models import Event, Family, SiteBranding, User
+from .models import Event, Family, Member, SiteBranding, User
 from .views_organizer import organizer_required
 
 
@@ -35,7 +35,12 @@ class ProfileForm(forms.ModelForm):
         fields = ("email", "first_name", "last_name", "phone", "is_active", "is_competition_official")
         labels = {"is_active": "Compte actif"}
         help_texts = {
-            "is_competition_official": "Ce profil se cumule avec les droits sélectionnés ci-dessous.",
+            "is_competition_official": (
+                "Ce profil se cumule avec les droits sélectionnés ci-dessous. "
+                "Si un profil personnel est lié à ce compte, sa fonction est mise à jour. "
+                "Pour les autres personnes, attribuez la fonction individuellement dans Familles et officiels. "
+                "Licence et formation à jour nécessaires."
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -108,18 +113,32 @@ def profile_update(request, user_id):
                 ):
                     form.add_error(None, "Il faut conserver au moins un administrateur actif.")
                 else:
-                    profile = form.save(commit=False)
-                    profile.is_superuser = role == "administrator"
-                    profile.is_staff = role == "administrator"
-                    profile.is_organizer = role in {"administrator", "organizer"}
-                    # A role change must remove any previously delegated Django permissions.
-                    profile.save()
-                    if role == "family":
-                        Family.objects.get_or_create(account=profile)
-                    profile.groups.clear()
-                    profile.user_permissions.clear()
-                    messages.success(request, "Le profil et ses droits ont été enregistrés.")
-                    return redirect("profile_list")
+                    try:
+                        # A validation failure on the participant must also roll back
+                        # account rights, permission removals and the legacy role flag.
+                        with transaction.atomic():
+                            member = Member.objects.select_for_update().filter(user=profile).first()
+                            profile = form.save(commit=False)
+                            profile.is_superuser = role == "administrator"
+                            profile.is_staff = role == "administrator"
+                            profile.is_organizer = role in {"administrator", "organizer"}
+                            if member:
+                                member.is_competition_official = profile.is_competition_official
+                                member.full_clean()
+                            profile.save()
+                            if member:
+                                member.save(update_fields=["is_competition_official", "updated_at"])
+                            if role == "family":
+                                Family.objects.get_or_create(account=profile)
+                            # A role change must remove previously delegated Django permissions.
+                            profile.groups.clear()
+                            profile.user_permissions.clear()
+                    except ValidationError as error:
+                        for message in error.messages:
+                            form.add_error(None, message)
+                    else:
+                        messages.success(request, "Le profil et ses droits ont été enregistrés.")
+                        return redirect("profile_list")
     else:
         profile = get_object_or_404(User, pk=user_id)
         form = ProfileForm(instance=profile)

@@ -321,6 +321,7 @@ def family_registration_edit(request, event_day_id, member_id):
         request.POST or None,
         event_day=event_day,
         registration=registration,
+        member=member,
     )
     if request.method == "POST" and form.is_valid():
         try:

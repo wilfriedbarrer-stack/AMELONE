@@ -1,8 +1,9 @@
 """Inscription personnelle, avec affectation directe réservée aux administrateurs."""
 
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 
+from .eligibility import validate_member_station
 from .models import Assignment, Event, EventDay, Member, StationSlot, User
 from .participation import save_participation
 from .services import BusinessRuleError, confirm_assignments, create_assignment, remove_assignment
@@ -54,18 +55,25 @@ def save_personal_participation(*, actor, event_day, availability, preferred_sta
         slot = slots[slot_id]
         if slot.event_day_id != registration.event_day_id:
             raise BusinessRuleError("Choisissez un poste actif de cette journée.")
+        try:
+            validate_member_station(member, slot.station, event_day)
+        except ValidationError as error:
+            raise BusinessRuleError(error.messages) from error
         if not slot.station.is_active and slot_id not in confirmed_slot_ids:
             raise BusinessRuleError("Ce poste est inactif. Choisissez un autre poste ou retirez cette affectation.")
     retained = []
+    coverage_invalidated = set(getattr(registration, "coverage_invalidated_assignment_ids", []))
     for item in current:
         if item.station_slot_id in selected_ids:
             retained.append(item)
         else:
-            remove_assignment(assignment=item, actor=user, reason="Poste retiré de ma participation.")
+            removed = remove_assignment(assignment=item, actor=user, reason="Poste retiré de ma participation.")
+            coverage_invalidated.update(getattr(removed, "coverage_invalidated_assignment_ids", []))
     retained_ids = {item.station_slot_id for item in retained}
     for slot_id in sorted(selected_ids - retained_ids):
         retained.append(create_assignment(registration=registration, station_slot=slots[slot_id], actor=user))
     drafts = [item for item in retained if item.status == Assignment.Status.DRAFT]
     if drafts:
         confirm_assignments(assignments=drafts, confirmed_by=user)
+    registration.coverage_invalidated_assignment_ids = list(coverage_invalidated)
     return registration

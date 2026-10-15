@@ -3,6 +3,7 @@
 from django import forms
 from django.db.models import Count, Q
 
+from .forms_eligibility import eligible_slots, station_requirements_label
 from .forms_family import FamilyRegistrationForm, MemberForm
 from .models import Assignment, Member, StationSlot
 
@@ -50,24 +51,30 @@ class PersonalSlotChoiceField(forms.ModelMultipleChoiceField):
         remaining = max(0, slot.capacity - slot.assignment_count)
         hours = f"{slot.start_time:%H:%M}–{slot.end_time:%H:%M}" if slot.start_time and slot.end_time else "Horaires à préciser"
         inactive = " (poste inactif, affectation existante)" if not slot.station.is_active else ""
+        requirements = station_requirements_label(slot.station)
         return (f"{slot.station.name}{inactive} · {slot.station.get_category_display()} · "
                 f"{slot.get_period_display()} · {hours} "
-                f"· {remaining} place(s) restante(s)")
+                f"· {remaining} place(s) restante(s)" + (f" · {requirements}" if requirements else ""))
 
 
 class PersonalRegistrationForm(FamilyRegistrationForm):
-    def __init__(self, *args, user, event_day, registration=None, **kwargs):
+    def __init__(self, *args, user, event_day, registration=None, member=None, **kwargs):
+        member = member or Member.objects.filter(user=user, family__account=user).first()
         super().__init__(*args, event_day=event_day, registration=registration,
-                         allow_closed_meals=user.is_superuser, **kwargs)
+                         member=member, allow_closed_meals=user.is_superuser, **kwargs)
         if user.is_superuser:
             self.fields.pop("preferred_station")
             current_slot_ids = list(registration.assignments.exclude(
                 status=Assignment.Status.CANCELLED,
             ).values_list("station_slot_id", flat=True)) if registration else []
+            available_slots = StationSlot.objects.filter(event_day=event_day)
+            available_slots = available_slots.filter(
+                Q(station__is_active=True) | Q(pk__in=current_slot_ids),
+            ).select_related("station", "event_day")
+            eligible_ids = list(eligible_slots(available_slots, member, event_day).values_list("pk", flat=True))
             self.fields["station_slots"] = PersonalSlotChoiceField(
                 label="Mes postes et périodes", required=False,
-                queryset=StationSlot.objects.filter(event_day=event_day)
-                .filter(Q(station__is_active=True) | Q(pk__in=current_slot_ids))
+                queryset=available_slots.filter(Q(pk__in=eligible_ids) | Q(pk__in=current_slot_ids))
                 .select_related("station")
                 .annotate(assignment_count=Count("assignments", filter=Q(
                     assignments__status__in=[Assignment.Status.DRAFT, Assignment.Status.CONFIRMED],
@@ -75,7 +82,7 @@ class PersonalRegistrationForm(FamilyRegistrationForm):
                 )))
                 .order_by("station__position", "station__name", "start_time"),
                 widget=forms.CheckboxSelectMultiple,
-                help_text="Cochez vos postes pour confirmer vos affectations. Décochez un poste pour le retirer. Vous pouvez aussi vous inscrire sans poste.",
+                help_text="Cochez vos postes pour confirmer vos affectations et décochez-les pour les retirer. Un poste d’officiel nécessite une habilitation attribuée à votre profil personnel par un administrateur. Licence et formation à jour nécessaires.",
             )
             if registration:
                 self.initial["station_slots"] = current_slot_ids

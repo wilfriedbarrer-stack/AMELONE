@@ -10,13 +10,15 @@
         <h1>Chaque bonne volonté<br>trouve sa place.</h1>
         <p class="lead">Disponibilités, affectations et repas réunis dans un espace clair pour les familles, les bénévoles et l’équipe organisatrice.</p>
         <div class="button-row">
+          {% url 'public_planning' as public_planning_url %}
+          <a class="button button-primary" href="{{ public_planning_url|default:'/planning/' }}">Consulter le planning public</a>
           {% if user.is_authenticated %}
             {% url 'dashboard' as dashboard_url %}
             {% url 'organizer_dashboard' as organizer_dashboard_url %}
-            <a class="button button-primary" href="{% if is_organizer %}{{ organizer_dashboard_url|default:'/organisateur/' }}{% else %}{{ dashboard_url|default:'/famille/' }}{% endif %}">Accéder à mon espace</a>
+            <a class="button button-secondary" href="{% if is_organizer %}{{ organizer_dashboard_url|default:'/organisateur/' }}{% else %}{{ dashboard_url|default:'/famille/' }}{% endif %}">Accéder à mon espace</a>
           {% else %}
             {% url 'signup' as signup_url %}
-            <a class="button button-primary" href="{{ signup_url|default:'/inscription/' }}">Créer un compte famille</a>
+            <a class="button button-secondary" href="{{ signup_url|default:'/inscription/' }}">Créer un compte famille</a>
             <a class="button button-secondary" href="{% url 'login' %}">Se connecter</a>
           {% endif %}
         </div>

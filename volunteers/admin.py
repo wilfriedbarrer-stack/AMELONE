@@ -4,6 +4,9 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from django.contrib.auth.models import Group
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
+from django.urls import reverse
+from django.utils.html import format_html
 
 from .models import (
     Assignment,
@@ -29,6 +32,17 @@ from .models import (
 
 class ReadOnlyTimestampsMixin:
     readonly_fields = ("id", "created_at", "updated_at")
+
+
+class PreserveHistoryMixin:
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def delete_model(self, request, obj):
+        raise PermissionDenied("Utilisez les écrans organisateur pour retirer une participation ou une affectation.")
+
+    def delete_queryset(self, request, queryset):
+        raise PermissionDenied("L’historique des participations et des affectations doit être conservé.")
 
 
 class NormalizedEmailMixin:
@@ -86,16 +100,39 @@ class UserAdmin(AdministratorOnlyMixin, DjangoUserAdmin):
     add_form = AdminProfileCreationForm
     form = AdminProfileChangeForm
 
+    @transaction.atomic
     def save_model(self, request, obj, form, change):
+        users = {user.pk: user for user in User.objects.select_for_update().filter(
+            pk__in={request.user.pk, obj.pk},
+        ).order_by("pk")}
+        actor = users.get(request.user.pk)
+        if actor is None or not actor.is_active or not actor.is_superuser:
+            raise PermissionDenied("Les droits administrateur sont nécessaires.")
+        member = Member.objects.select_for_update().filter(user_id=obj.pk).first() if change else None
+        if member:
+            # L'habilitation est attribuée à une personne depuis l'écran familles.
+            obj.is_competition_official = member.is_competition_official
         super().save_model(request, obj, form, change)
         if not (obj.is_staff or obj.is_superuser or obj.is_organizer):
             Family.objects.get_or_create(account=obj)
 
     def get_readonly_fields(self, request, obj=None):
         fields = super().get_readonly_fields(request, obj)
+        if obj and Member.objects.filter(user=obj).exists():
+            fields = (*fields, "is_competition_official")
         if obj and obj.pk == request.user.pk:
             return (*fields, "is_active", "is_superuser", "is_staff")
         return fields
+
+    @admin.display(description="Habilitation individuelle")
+    def official_permission_management(self, obj):
+        member = Member.objects.filter(user=obj).first() if obj else None
+        if member:
+            return format_html(
+                '<a href="{}">Gérer l’habilitation officielle dans la famille</a>',
+                reverse("administrator_family_detail", args=[member.family_id]),
+            )
+        return "L’habilitation individuelle sera attribuée après la création du profil personnel."
 
     def has_delete_permission(self, request, obj=None):
         return super().has_delete_permission(request, obj) and (
@@ -120,11 +157,11 @@ class UserAdmin(AdministratorOnlyMixin, DjangoUserAdmin):
     )
     list_filter = ("is_competition_official", "is_organizer", "is_staff", "is_active", "groups")
     search_fields = ("email", "first_name", "last_name", "phone")
-    readonly_fields = ("id", "last_login", "date_joined")
+    readonly_fields = ("id", "last_login", "date_joined", "official_permission_management")
     fieldsets = (
         (None, {"fields": ("id", "email", "password")}),
         ("Identité", {"fields": ("first_name", "last_name", "phone")}),
-        ("Participation", {"fields": ("is_competition_official",)}),
+        ("Participation", {"fields": ("is_competition_official", "official_permission_management")}),
         (
             "Droits",
             {
@@ -183,6 +220,25 @@ class FamilyAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
     autocomplete_fields = ("account",)
     inlines = (MemberInline,)
 
+    @transaction.atomic
+    def save_formset(self, request, form, formset, change):
+        if formset.model is not Member:
+            return super().save_formset(request, form, formset, change)
+        instances = formset.save(commit=False)
+        for member in formset.deleted_objects:
+            member.delete()
+        for member in instances:
+            if member._state.adding:
+                member.is_competition_official = False
+                member.user_id = None
+                member.save()
+            else:
+                current = Member.objects.select_for_update().get(pk=member.pk)
+                member.is_competition_official = current.is_competition_official
+                member.user_id = current.user_id
+                member.save(update_fields=[*MemberInline.fields, "updated_at"])
+        formset.save_m2m()
+
     @admin.display(description="Membres")
     def member_count(self, obj):
         return obj.members.count()
@@ -195,6 +251,37 @@ class MemberAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
     search_fields = ("first_name", "last_name", "family__name", "family__account__email")
     autocomplete_fields = ("family",)
 
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        if not request.user.is_superuser:
+            return (*fields, "is_competition_official", "user")
+        return (*fields, "user") if obj else fields
+
+    @transaction.atomic
+    def save_model(self, request, obj, form, change):
+        user_ids = {request.user.pk}
+        if obj.user_id:
+            user_ids.add(obj.user_id)
+        users = {user.pk: user for user in User.objects.select_for_update().filter(
+            pk__in=user_ids,
+        ).order_by("pk")}
+        actor = users.get(request.user.pk)
+        permission = "volunteers.change_member" if change else "volunteers.add_member"
+        if actor is None or not actor.is_active or not actor.is_staff or not actor.has_perm(permission):
+            raise PermissionDenied("Les droits de gestion de ce membre sont nécessaires.")
+        previous = Member.objects.select_for_update().filter(pk=obj.pk).first() if change else None
+        if previous and previous.user_id != obj.user_id:
+            # Les changements de compte personnel passent par les écrans dédiés.
+            raise PermissionDenied("Le compte personnel de ce membre ne peut pas être modifié ici.")
+        if not actor.is_superuser:
+            obj.is_competition_official = previous.is_competition_official if previous else False
+            obj.user_id = previous.user_id if previous else None
+        super().save_model(request, obj, form, change)
+        if obj.user_id:
+            linked_user = users[obj.user_id]
+            linked_user.is_competition_official = obj.is_competition_official
+            linked_user.save(update_fields=["is_competition_official"])
+
     @admin.display(description="Âge")
     def current_age(self, obj):
         return obj.age_on()
@@ -205,6 +292,17 @@ class EventDayInline(admin.TabularInline):
     extra = 1
     fields = ("date",)
     show_change_link = True
+    can_delete = False
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and Registration.objects.filter(event_day__event=obj).exists():
+            return ("date",)
+        return ()
+
+    def has_add_permission(self, request, obj=None):
+        return super().has_add_permission(request, obj) and not (
+            obj and Registration.objects.filter(event_day__event=obj).exists()
+        )
 
 
 class StationInline(admin.TabularInline):
@@ -243,6 +341,10 @@ class EventDayAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
     search_fields = ("event__name", "event__location")
     autocomplete_fields = ("event",)
     date_hierarchy = "date"
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        return (*fields, "event", "date") if obj and obj.registrations.exists() else fields
 
     @admin.display(description="Inscriptions")
     def registration_count(self, obj):
@@ -295,10 +397,14 @@ class AssignmentInline(admin.TabularInline):
     readonly_fields = ("period",)
     autocomplete_fields = ("station_slot",)
     show_change_link = True
+    can_delete = False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Registration)
-class RegistrationAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
+class RegistrationAdmin(PreserveHistoryMixin, ReadOnlyTimestampsMixin, admin.ModelAdmin):
     list_display = (
         "member",
         "event_day",
@@ -320,6 +426,20 @@ class RegistrationAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
     autocomplete_fields = ("member", "event_day", "preferred_station")
     inlines = (AssignmentInline,)
 
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        if obj:
+            return (*fields, "member", "event_day", "availability", "preferred_station",
+                    "status", "organizer_management")
+        return fields
+
+    @admin.display(description="Modifier ou annuler l’inscription")
+    def organizer_management(self, obj):
+        return format_html(
+            '<a href="{}">Ouvrir la gestion organisateur de cette inscription</a>',
+            reverse("registration_update", args=[obj.pk]),
+        )
+
 
 class AssignmentCommunicationInline(admin.TabularInline):
     model = AssignmentCommunication
@@ -334,7 +454,7 @@ class AssignmentCommunicationInline(admin.TabularInline):
 
 
 @admin.register(Assignment)
-class AssignmentAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
+class AssignmentAdmin(PreserveHistoryMixin, ReadOnlyTimestampsMixin, admin.ModelAdmin):
     list_display = (
         "member_name",
         "station_slot",

@@ -141,3 +141,32 @@ Un officiel sans droits administrateur indique son poste souhaité ; l’organis
 confirme ensuite l’affectation. Les échéances habituelles restent applicables.
 La migration `0005_competition_official_personal_member` est appliquée par le script
 Render lors de la publication.
+
+## Habilitations individuelles et règles d’âge des postes
+
+**Administration → Familles, membres et officiels** affiche les personnes de
+chaque famille, avec leur identité et leur âge dans cet espace privé.
+L’administrateur attribue la fonction **Officiel de compétition** à chaque membre.
+Seule cette habilitation individuelle permet de choisir un poste officiel,
+y compris lorsque la personne est elle-même administratrice. Le profil d’accès
+du compte responsable ne qualifie pas automatiquement les autres membres.
+Les postes officiels portent la mention **Licence et formation à jour nécessaires.**
+
+La fiche d’un poste propose trois règles : aucune condition d’âge, au moins un
+adulte confirmé par créneau, ou uniquement des adultes. L’âge retenu est celui
+à la date de l’événement ; une personne est adulte dès ses 18 ans révolus.
+Avec la règle d’encadrement, les affectations mineures peuvent être préparées
+en brouillon, puis confirmées avec un adulte sur le même créneau. Si le dernier
+adulte se retire, les confirmations des mineurs repassent en brouillon pour être
+réorganisées. L’historique est conservé. Les règles sont reprises lors de la
+duplication d’un événement et de la création depuis un profil réutilisable.
+
+Le **Planning public** est mis en évidence sur l’accueil et dans la navigation,
+avec ou sans connexion. Il affiche les noms confirmés, les postes, horaires et
+capacités, sans âge individuel, date de naissance, coordonnées, repas ni remarque.
+
+La migration `0006_member_official_station_age_policy` ajoute ces règles. Elle
+conserve les habilitations de comptes déjà reliés à leur participant personnel.
+Les anciennes confirmations officielles futures sans habilitation individuelle
+repassent en brouillon ; l’administrateur doit habiliter le membre avant de les
+confirmer à nouveau.

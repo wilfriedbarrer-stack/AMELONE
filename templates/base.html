@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#12651c">
   <title>{% block title %}AMELONE LOISIRS{% endblock %}</title>
   <meta name="description" content="Gestion des bénévoles et des événements de l’association Amelone Loisirs.">
-  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=amelone-loisirs-3">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=amelone-loisirs-4">
   {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -22,6 +22,8 @@
       </a>
 
       <nav class="primary-nav" aria-label="Navigation principale">
+        {% url 'public_planning' as public_planning_url %}
+        <a class="nav-planning" href="{{ public_planning_url|default:'/planning/' }}"{% if request.resolver_match.url_name == 'public_planning' %} aria-current="page"{% endif %}>Planning public</a>
         {% if user.is_authenticated %}
           {% if is_organizer %}
             <a href="{% url 'administration_dashboard' %}">Administration</a>
@@ -46,9 +48,7 @@
           {% if can_self_participate %}<a href="{% url 'personal_participation' %}">Ma participation</a>{% endif %}
         {% else %}
           {% url 'public_events' as public_events_url %}
-          {% url 'public_planning' as public_planning_url %}
           <a href="{{ public_events_url|default:'/evenements/' }}">Événements</a>
-          <a href="{{ public_planning_url|default:'/planning/' }}">Planning public</a>
         {% endif %}
       </nav>
 

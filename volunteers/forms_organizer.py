@@ -16,6 +16,12 @@ from django.db.models import Q
 from django.forms import inlineformset_factory
 from django.utils import timezone
 
+from .forms_eligibility import (
+    eligible_slots,
+    eligible_stations,
+    slot_choice_label,
+    station_choice_label,
+)
 from .models import (
     Assignment,
     Attendance,
@@ -143,12 +149,17 @@ class StationForm(OrganizerFormMixin, forms.ModelForm):
             "description",
             "instructions",
             "category",
+            "age_policy",
             "is_active",
             "position",
         )
         widgets = {
             "description": forms.Textarea(attrs={"rows": 3}),
             "instructions": forms.Textarea(attrs={"rows": 3}),
+        }
+        help_texts = {
+            "category": "Poste officiel : habilitation attribuée au membre par un administrateur. Licence et formation à jour nécessaires.",
+            "age_policy": "L’âge est calculé le jour de l’événement, avec 18 ans révolus pour un adulte. La présence d’un adulte est vérifiée pour chaque créneau confirmé.",
         }
 
 
@@ -200,6 +211,11 @@ class RegistrationOrganizerForm(OrganizerFormMixin, forms.ModelForm):
             else Station.objects.none()
         )
         self.fields["preferred_station"].empty_label = "Sans préférence"
+        if self.instance.member_id and self.instance.event_day_id:
+            self.fields["preferred_station"].queryset = eligible_stations(
+                self.fields["preferred_station"].queryset, self.instance.member, self.instance.event_day,
+            )
+        self.fields["preferred_station"].label_from_instance = station_choice_label
 
 
 # Nom court conservé pour les imports de templates/tests.
@@ -257,12 +273,15 @@ class AssignmentForm(OrganizerFormMixin, forms.Form):
             slots = slots.none()
         if registration is not None:
             registrations = registrations.filter(pk=registration.pk)
+            slots = eligible_slots(slots.select_related("station", "event_day"), registration.member, event_day)
         self.fields["registration"].queryset = registrations.select_related(
             "member", "event_day"
         ).order_by("event_day__date", "member__last_name", "member__first_name")
         self.fields["station_slot"].queryset = slots.select_related(
             "station", "event_day"
         ).order_by("event_day__date", "period", "station__position", "station__name")
+        self.fields["station_slot"].label_from_instance = slot_choice_label
+        self.fields["station_slot"].help_text = "Les règles d’âge et l’habilitation officielle sont contrôlées avant l’affectation. Licence et formation à jour nécessaires sur les postes officiels."
         if registration is not None:
             self.fields["registration"].widget = forms.HiddenInput()
 

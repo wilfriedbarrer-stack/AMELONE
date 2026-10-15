@@ -20,6 +20,7 @@ from django.db.models import Max, Q, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
+from .eligibility import validate_adult_coverage_for_confirmation
 from .models import (
     Assignment,
     AssignmentCommunication,
@@ -110,6 +111,22 @@ def _validate_preferred_station(event_day: EventDay, station: Station | None) ->
         )
 
 
+def _lock_assignment_registrations(registration_ids):
+    """Un ordre unique, aussi compatible avec l'inscription personnelle."""
+    coordinates = list(Registration.objects.filter(pk__in=registration_ids).values_list(
+        "member_id", "event_day_id"
+    ))
+    list(Member.objects.select_for_update(of=("self",)).filter(
+        pk__in={item[0] for item in coordinates}
+    ).order_by("pk"))
+    list(EventDay.objects.select_for_update(of=("self",)).filter(
+        pk__in={item[1] for item in coordinates}
+    ).order_by("pk"))
+    return {item.pk: item for item in Registration.objects.select_for_update(of=("self",))
+            .filter(pk__in=registration_ids)
+            .select_related("member__family", "event_day__event").order_by("pk")}
+
+
 def _cancel_incompatible_assignments(
     registration: Registration,
     *,
@@ -119,6 +136,12 @@ def _cancel_incompatible_assignments(
     """Retire les affectations devenues incohérentes sans effacer leur audit."""
 
     active_statuses = (Assignment.Status.DRAFT, Assignment.Status.CONFIRMED)
+    slot_ids = list(registration.assignments.filter(status__in=active_statuses).values_list(
+        "station_slot_id", flat=True
+    ))
+    list(StationSlot.objects.select_for_update(of=("self",)).filter(
+        pk__in=slot_ids
+    ).order_by("pk"))
     assignments = list(
         Assignment.objects.select_for_update(of=("self",))
         .filter(registration=registration, status__in=active_statuses)
@@ -126,6 +149,7 @@ def _cancel_incompatible_assignments(
         .order_by("created_at")
     )
     invalidated: list[dict[str, Any]] = []
+    coverage_invalidated = set()
     now = timezone.now()
     for assignment in assignments:
         if (
@@ -148,6 +172,7 @@ def _cancel_incompatible_assignments(
                 "updated_at",
             )
         )
+        coverage_invalidated.update(getattr(assignment, "coverage_invalidated_assignment_ids", []))
         invalidated.append(
             {
                 "assignment_id": assignment.pk,
@@ -158,6 +183,7 @@ def _cancel_incompatible_assignments(
                 "needs_communication": was_communicated,
             }
         )
+    registration.coverage_invalidated_assignment_ids = list(coverage_invalidated)
     return invalidated
 
 
@@ -189,6 +215,11 @@ def save_registration(
         raise BusinessRuleError(
             "Ce membre est archivé et ne peut plus être inscrit.", code="archived_member"
         )
+    if preferred_station is not None:
+        try:
+            preferred_station = Station.objects.get(pk=preferred_station.pk)
+        except Station.DoesNotExist as error:
+            raise BusinessRuleError("Ce poste n'est plus proposé.", code="invalid_station") from error
     _validate_preferred_station(locked_day, preferred_station)
 
     registration = (
@@ -235,11 +266,7 @@ def cancel_registration(
     """Annule une inscription et toutes ses affectations actives."""
 
     organizer = _is_organizer(actor, explicit=actor_is_organizer)
-    locked = (
-        Registration.objects.select_for_update(of=("self",))
-        .select_related("member__family", "event_day__event")
-        .get(pk=registration.pk)
-    )
+    locked = _lock_assignment_registrations({registration.pk})[registration.pk]
     _check_member_access(actor, locked.member, organizer=organizer)
     _check_registration_window(locked.event_day.event, organizer=organizer)
     if locked.status == Registration.Status.CANCELLED:
@@ -282,11 +309,7 @@ def create_assignment(
     """
 
     _check_organizer_access(actor)
-    locked_registration = (
-        Registration.objects.select_for_update(of=("self",))
-        .select_related("event_day", "member")
-        .get(pk=registration.pk)
-    )
+    locked_registration = _lock_assignment_registrations({registration.pk})[registration.pk]
     locked_slot = (
         StationSlot.objects.select_for_update(of=("self",))
         .select_related("station", "event_day")
@@ -323,14 +346,12 @@ def update_assignment(
     registration_id = Assignment.objects.values_list("registration_id", flat=True).get(
         pk=assignment.pk
     )
-    # Même ordre de verrouillage que create/confirm et que la modification d'une
-    # inscription : inscription, créneau, puis affectation.
-    Registration.objects.select_for_update(of=("self",)).get(pk=registration_id)
-    destination = (
-        StationSlot.objects.select_for_update(of=("self",))
-        .select_related("station", "event_day")
-        .get(pk=station_slot.pk)
-    )
+    _lock_assignment_registrations({registration_id})
+    original_slot_id = Assignment.objects.values_list("station_slot_id", flat=True).get(pk=assignment.pk)
+    slots = {slot.pk: slot for slot in StationSlot.objects.select_for_update(of=("self",))
+             .filter(pk__in={station_slot.pk, original_slot_id})
+             .select_related("station", "event_day").order_by("pk")}
+    destination = slots[station_slot.pk]
     locked = (
         Assignment.objects.select_for_update(of=("self",))
         .select_related("registration__event_day", "station_slot")
@@ -367,7 +388,9 @@ def remove_assignment(
     registration_id = Assignment.objects.values_list("registration_id", flat=True).get(
         pk=assignment.pk
     )
-    Registration.objects.select_for_update(of=("self",)).get(pk=registration_id)
+    _lock_assignment_registrations({registration_id})
+    slot_id = Assignment.objects.values_list("station_slot_id", flat=True).get(pk=assignment.pk)
+    StationSlot.objects.select_for_update(of=("self",)).get(pk=slot_id)
     locked = Assignment.objects.select_for_update(of=("self",)).get(pk=assignment.pk)
     if locked.status == Assignment.Status.CANCELLED:
         return locked
@@ -422,7 +445,7 @@ def confirm_assignments(
         )
     registration_ids = {registration_id for _, registration_id in preflight}
     # Ordre identique aux créations et modifications concurrentes.
-    list(Registration.objects.select_for_update(of=("self",)).filter(pk__in=registration_ids).order_by("pk"))
+    _lock_assignment_registrations(registration_ids)
     slot_ids = set(
         Assignment.objects.filter(pk__in=ids).values_list("station_slot_id", flat=True)
     )
@@ -430,7 +453,7 @@ def confirm_assignments(
     locked = list(
         Assignment.objects.select_for_update(of=("self",))
         .filter(pk__in=ids)
-        .select_related("registration", "station_slot__station")
+        .select_related("registration__member", "registration__event_day", "station_slot__station")
         .order_by("created_at")
     )
     if len(locked) != len(ids):
@@ -449,12 +472,20 @@ def confirm_assignments(
             item.full_clean()
         except ValidationError as exc:
             raise _business_error(exc, code="invalid_assignment") from exc
+    try:
+        validate_adult_coverage_for_confirmation(locked)
+    except ValidationError as exc:
+        raise _business_error(exc, code="adult_coverage_required") from exc
+    for item in locked:
         item.status = Assignment.Status.CONFIRMED
         item.confirmed_at = now
         item.confirmed_by = confirmed_by
-        item.save(
-            update_fields=("status", "confirmed_at", "confirmed_by", "period", "updated_at")
-        )
+        item.updated_at = now
+    # Un seul état final : l'adulte et les mineurs d'un même lot deviennent
+    # confirmés ensemble, quel que soit l'ordre de leur sélection.
+    Assignment.objects.bulk_update(
+        locked, ("status", "confirmed_at", "confirmed_by", "period", "updated_at")
+    )
     return locked
 
 

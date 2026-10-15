@@ -89,7 +89,10 @@ def personal_profile(request):
                 member.user = user
                 member.archived_at = None
                 member.full_clean()
-                member.save()
+                if member._state.adding:
+                    member.save()
+                else:
+                    member.save(update_fields=["first_name", "last_name", "birth_date", "user", "archived_at", "updated_at"])
                 user.first_name, user.last_name = member.first_name, member.last_name
                 user.save(update_fields=["first_name", "last_name"])
             messages.success(request, "Votre profil personnel est enregistré. Vous pouvez participer aux événements.")
@@ -113,19 +116,21 @@ def personal_registration(request, event_day_id):
                             event__status__in=statuses)
     registration = Registration.objects.filter(member=member, event_day=day).first()
     form = PersonalRegistrationForm(request.POST or None, user=request.user, event_day=day,
-                                    registration=registration)
+                                    registration=registration, member=member)
     if request.method == "POST" and form.is_valid():
         try:
             choices = None
             if form.meal_choices_open:
                 choices = {key: form.cleaned_data[key] for key in
                            ("menu", "beverage", "no_meal", "payment_method")}
-            save_personal_participation(
+            saved = save_personal_participation(
                 actor=request.user, event_day=day, availability=form.cleaned_data["availability"],
                 preferred_station=form.cleaned_data.get("preferred_station"),
                 note=form.cleaned_data["note"], meal_choices=choices,
                 station_slots=form.cleaned_data.get("station_slots"),
             )
+            if getattr(saved, "coverage_invalidated_assignment_ids", []):
+                messages.warning(request, "Des affectations de mineurs sont repassées en brouillon : un adulte doit être confirmé sur leur créneau.")
             messages.success(request, "Votre participation a été enregistrée." + (
                 " Vos postes sélectionnés sont confirmés." if request.user.is_superuser else ""
             ))

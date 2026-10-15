@@ -213,6 +213,7 @@ def event_duplicate(request, event_id):
                     description=station.description,
                     instructions=station.instructions,
                     category=station.category,
+                    age_policy=station.age_policy,
                     is_active=station.is_active,
                     position=station.position,
                 )
@@ -274,6 +275,8 @@ def _station_form(request, event, station=None):
     if request.method == "POST" and form.is_valid() and formset.is_valid():
         try:
             with transaction.atomic():
+                Event.objects.select_for_update().get(pk=event.pk)
+                list(EventDay.objects.select_for_update().filter(event=event).order_by("pk"))
                 existing_ids = [item.instance.pk for item in formset.forms if item.instance.pk]
                 list(StationSlot.objects.select_for_update().filter(pk__in=existing_ids).order_by("pk"))
                 for item in formset.forms:
@@ -353,6 +356,8 @@ def registration_update(request, registration_id):
         else:
             if getattr(saved, "reassignment_required", False):
                 messages.warning(request, "Des affectations incompatibles ont été retirées : réaffectation nécessaire.")
+            if getattr(saved, "coverage_invalidated_assignment_ids", []):
+                messages.warning(request, "Des affectations de mineurs sont repassées en brouillon : un adulte doit être confirmé sur leur créneau.")
             messages.success(request, "L'inscription a été corrigée.")
             return redirect("registration_list", event_id=registration.event_day.event_id)
     return render(
@@ -448,7 +453,7 @@ def assignment_update_view(request, assignment_id):
     form = AssignmentForm(request.POST or None, assignment=assignment)
     if request.method == "POST" and form.is_valid():
         try:
-            update_assignment(
+            saved = update_assignment(
                 assignment=assignment,
                 station_slot=form.cleaned_data["station_slot"],
                 actor=request.user,
@@ -457,6 +462,8 @@ def assignment_update_view(request, assignment_id):
             for text in _form_error_messages(error):
                 form.add_error(None, text)
         else:
+            if getattr(saved, "coverage_invalidated_assignment_ids", []):
+                messages.warning(request, "Des affectations de mineurs sont repassées en brouillon : un adulte doit être confirmé sur leur créneau.")
             messages.success(request, "L'affectation a été modifiée.")
             return redirect("assignment_board_event", event_id=assignment.registration.event_day.event_id)
     return render(
@@ -472,7 +479,9 @@ def assignment_remove(request, assignment_id):
     assignment = get_object_or_404(
         Assignment.objects.select_related("registration__event_day"), pk=assignment_id
     )
-    remove_assignment(assignment=assignment, actor=request.user)
+    saved = remove_assignment(assignment=assignment, actor=request.user)
+    if getattr(saved, "coverage_invalidated_assignment_ids", []):
+        messages.warning(request, "Des affectations de mineurs sont repassées en brouillon : un adulte doit être confirmé sur leur créneau.")
     messages.success(request, "L'affectation a été retirée et son historique conservé.")
     return redirect("assignment_board_event", event_id=assignment.registration.event_day.event_id)
 

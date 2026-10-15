@@ -10,7 +10,7 @@ from django.conf import settings
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import F, Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -123,6 +123,9 @@ class Member(UUIDTimeStampedModel):
     first_name = models.CharField(_("prénom"), max_length=150)
     last_name = models.CharField(_("nom"), max_length=150)
     birth_date = models.DateField(_("date de naissance"))
+    is_competition_official = models.BooleanField(
+        _("officiel de compétition"), default=False, db_default=False
+    )
     archived_at = models.DateTimeField(_("archivé le"), null=True, blank=True)
 
     class Meta:
@@ -142,6 +145,79 @@ class Member(UUIDTimeStampedModel):
             )
         if self.birth_date and self.birth_date > timezone.localdate():
             raise ValidationError({"birth_date": _("La date de naissance ne peut pas être future.")})
+        if self._state.adding:
+            return
+        previous = Member.objects.filter(pk=self.pk).values(
+            "birth_date", "is_competition_official"
+        ).first()
+        if not previous:
+            return
+        active = Assignment.objects.filter(
+            registration__member_id=self.pk,
+            registration__event_day__date__gte=timezone.localdate(),
+            status__in=(Assignment.Status.DRAFT, Assignment.Status.CONFIRMED),
+        ).select_related("station_slot__station", "registration__event_day")
+        if previous["is_competition_official"] and not self.is_competition_official:
+            if active.filter(station_slot__station__category=Station.Category.OFFICIAL).exists():
+                raise ValidationError({
+                    "is_competition_official": _(
+                        "Retirez les affectations officielles à venir avant de retirer cette fonction."
+                    )
+                })
+        if self.birth_date and previous["birth_date"] != self.birth_date:
+            from .eligibility import (
+                validate_adult_coverage_for_confirmation,
+                validate_member_station,
+            )
+
+            try:
+                for assignment in active:
+                    validate_member_station(
+                        self, assignment.station_slot.station, assignment.registration.event_day
+                    )
+                    if assignment.status == Assignment.Status.CONFIRMED:
+                        assignment.registration.member = self
+                        validate_adult_coverage_for_confirmation([assignment])
+            except ValidationError as error:
+                raise ValidationError({
+                    "birth_date": _(
+                        "Cette date rend une affectation à venir incompatible. "
+                        "Retirez ou réorganisez cette affectation avant de modifier la date de naissance."
+                    )
+                }) from error
+
+    @transaction.atomic
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            previous = Member.objects.select_for_update(of=("self",)).filter(pk=self.pk).values(
+                "birth_date", "is_competition_official"
+            ).first()
+            update_fields = kwargs.get("update_fields")
+            if previous and update_fields is not None:
+                for field in ("birth_date", "is_competition_official"):
+                    if field not in update_fields:
+                        setattr(self, field, previous[field])
+            if previous and (
+                self.birth_date != previous["birth_date"]
+                or self.is_competition_official != previous["is_competition_official"]
+            ):
+                affected = Assignment.objects.filter(
+                    registration__member_id=self.pk,
+                    registration__event_day__date__gte=timezone.localdate(),
+                    status__in=(Assignment.Status.DRAFT, Assignment.Status.CONFIRMED),
+                )
+                day_ids = list(affected.values_list("registration__event_day_id", flat=True))
+                slot_ids = list(affected.values_list("station_slot_id", flat=True))
+                # Deux adultes d'un même créneau ne peuvent pas devenir mineurs
+                # simultanément en se considérant chacun couvert par l'autre.
+                list(EventDay.objects.select_for_update(of=("self",)).filter(
+                    pk__in=day_ids
+                ).order_by("pk"))
+                list(StationSlot.objects.select_for_update(of=("self",)).filter(
+                    pk__in=slot_ids
+                ).order_by("pk"))
+                self.clean()
+        super().save(*args, **kwargs)
 
     @property
     def is_archived(self):
@@ -272,6 +348,11 @@ class Station(UUIDTimeStampedModel):
         VOLUNTEER = "volunteer", _("Bénévole")
         OFFICIAL = "official", _("Officiel")
 
+    class AgePolicy(models.TextChoices):
+        NONE = "none", _("Aucune condition d'âge")
+        AT_LEAST_ONE_ADULT = "at_least_one_adult", _("Au moins un adulte (18 ans ou plus)")
+        ADULTS_ONLY = "adults_only", _("Uniquement des adultes (18 ans ou plus)")
+
     event = models.ForeignKey(
         Event,
         verbose_name=_("événement"),
@@ -284,6 +365,10 @@ class Station(UUIDTimeStampedModel):
     category = models.CharField(
         _("catégorie"), max_length=16, choices=Category.choices, default=Category.VOLUNTEER
     )
+    age_policy = models.CharField(
+        _("règle d'âge"), max_length=24, choices=AgePolicy.choices,
+        default=AgePolicy.NONE, db_default=AgePolicy.NONE,
+    )
     is_active = models.BooleanField(_("actif"), default=True)
     position = models.PositiveSmallIntegerField(_("ordre d'affichage"), default=0)
 
@@ -294,6 +379,57 @@ class Station(UUIDTimeStampedModel):
         constraints = [
             models.UniqueConstraint(fields=("event", "name"), name="unique_station_name_per_event")
         ]
+
+    def clean(self):
+        super().clean()
+        previous = Station.objects.filter(pk=self.pk).values("category", "age_policy").first()
+        if not previous or (
+            previous["category"] == self.category and previous["age_policy"] == self.age_policy
+        ):
+            return
+        from .eligibility import validate_adult_coverage_for_confirmation, validate_member_station
+
+        confirmed = []
+        for assignment in Assignment.objects.filter(
+            station_slot__station_id=self.pk,
+            registration__event_day__date__gte=timezone.localdate(),
+            status__in=(Assignment.Status.DRAFT, Assignment.Status.CONFIRMED),
+        ).select_related("registration__member", "registration__event_day", "station_slot"):
+            assignment.station_slot.station = self
+            try:
+                validate_member_station(
+                    assignment.registration.member, self, assignment.registration.event_day
+                )
+            except ValidationError as error:
+                raise ValidationError(
+                    "Retirez ou réorganisez les affectations à venir incompatibles avant "
+                    "de changer les conditions de ce poste. " + " ".join(error.messages)
+                ) from error
+            if assignment.status == Assignment.Status.CONFIRMED:
+                confirmed.append(assignment)
+        validate_adult_coverage_for_confirmation(confirmed)
+
+    @transaction.atomic
+    def save(self, *args, **kwargs):
+        if self.event_id:
+            # La clé étrangère d'un nouveau poste prend aussi un verrou sur
+            # l'événement. Le prendre d'abord évite l'ordre inverse Day/Event
+            # face à une inscription personnelle qui tient déjà Event.
+            Event.objects.select_for_update(of=("self",)).get(pk=self.event_id)
+        previous = Station.objects.filter(pk=self.pk).values("category", "age_policy").first()
+        if previous and (
+            previous["category"] != self.category or previous["age_policy"] != self.age_policy
+        ):
+            # Les services d'affectation tiennent aussi ce verrou de journée.
+            # Ainsi un changement de règle ne peut valider un état périmé.
+            list(EventDay.objects.select_for_update(of=("self",)).filter(
+                event_id=self.event_id
+            ).order_by("pk"))
+            list(StationSlot.objects.select_for_update(of=("self",)).filter(
+                station_id=self.pk
+            ).order_by("pk"))
+            self.clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name} ({self.event.name})"
@@ -458,6 +594,13 @@ class Registration(UUIDTimeStampedModel):
             raise ValidationError(
                 {"preferred_station": _("Le poste souhaité doit appartenir à cet événement.")}
             )
+        if self.preferred_station_id and self.event_day_id and self.member_id:
+            from .eligibility import validate_member_station
+
+            try:
+                validate_member_station(self.member, self.preferred_station, self.event_day)
+            except ValidationError as error:
+                raise ValidationError({"preferred_station": error.messages}) from error
 
     def covers_period(self, period: str) -> bool:
         return self.availability == self.Availability.FULL_DAY or self.availability == period
@@ -547,6 +690,17 @@ class Assignment(UUIDTimeStampedModel):
         if registration.event_day_id != slot.event_day_id:
             errors["station_slot"] = _("Le créneau doit être rattaché à la journée d'inscription.")
         if self.status != self.Status.CANCELLED:
+            from .eligibility import (
+                validate_adult_coverage_for_confirmation,
+                validate_member_station,
+            )
+
+            try:
+                validate_member_station(registration.member, slot.station, registration.event_day)
+                if self.status == self.Status.CONFIRMED:
+                    validate_adult_coverage_for_confirmation([self])
+            except ValidationError as error:
+                errors["station_slot"] = error.messages
             if registration.status != Registration.Status.ACTIVE:
                 errors["registration"] = _("Une inscription annulée ne peut pas être affectée.")
             if not registration.covers_period(slot.period):
@@ -571,11 +725,52 @@ class Assignment(UUIDTimeStampedModel):
         if errors:
             raise ValidationError(errors)
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
-        if self.station_slot_id:
+        # Les écritures directes de l'administration suivent le même ordre que
+        # les services : membre, journée, inscription, créneau, affectation.
+        previous = Assignment.objects.filter(pk=self.pk).values(
+            "registration_id", "station_slot_id", "status"
+        ).first()
+        update_fields = kwargs.get("update_fields")
+        if previous and update_fields is not None:
+            for field in ("registration", "station_slot"):
+                if field not in update_fields and f"{field}_id" not in update_fields:
+                    setattr(self, f"{field}_id", previous[f"{field}_id"])
+            if "status" not in update_fields:
+                self.status = previous["status"]
+        registration_ids = {self.registration_id}
+        slot_ids = {self.station_slot_id}
+        if previous:
+            registration_ids.add(previous["registration_id"])
+            slot_ids.add(previous["station_slot_id"])
+        coordinates = list(Registration.objects.filter(pk__in=registration_ids).values_list(
+            "member_id", "event_day_id"
+        ))
+        list(Member.objects.select_for_update(of=("self",)).filter(
+            pk__in={item[0] for item in coordinates}
+        ).order_by("pk"))
+        list(EventDay.objects.select_for_update(of=("self",)).filter(
+            pk__in={item[1] for item in coordinates}
+        ).order_by("pk"))
+        registrations = {item.pk: item for item in Registration.objects.select_for_update(
+            of=("self",)
+        ).filter(pk__in=registration_ids).select_related("member", "event_day").order_by("pk")}
+        slots = {item.pk: item for item in StationSlot.objects.select_for_update(
+            of=("self",)
+        ).filter(pk__in=slot_ids).select_related("station", "event_day").order_by("pk")}
+        if previous:
+            Assignment.objects.select_for_update(of=("self",)).get(pk=self.pk)
+        if self.registration_id in registrations:
+            self.registration = registrations[self.registration_id]
+        if self.station_slot_id in slots:
+            self.station_slot = slots[self.station_slot_id]
             self.period = self.station_slot.period
         self.full_clean()
         super().save(*args, **kwargs)
+        from .eligibility import ensure_confirmed_adult_coverage
+
+        self.coverage_invalidated_assignment_ids = ensure_confirmed_adult_coverage(slot_ids)
 
     def communication_payload(self):
         slot = self.station_slot
