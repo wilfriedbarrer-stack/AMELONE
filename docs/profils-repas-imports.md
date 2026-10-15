@@ -64,6 +64,12 @@ Pour les proposer partout, utiliser **Rendre commun** et confirmer : les choix
 déjà réservés sont conservés. Un conflit de nom est signalé avant validation.
 Une désactivation retire l’option des nouveaux choix sans supprimer les commandes.
 
+Les boissons déjà présentes ont été regroupées dans ce catalogue commun : une
+offre par boisson est proposée sur toutes les dates. Les copies locales identiques
+restent désactivées pour préserver les anciennes réservations, leurs références
+et leurs tarifs. Les profils d’événements utilisent aussi cette offre commune
+sans reproposer leurs anciennes copies identiques.
+
 ## Importer des menus ou boissons
 
 Utiliser un CSV UTF-8 (séparateur `;`, `,` ou tabulation) ou un Excel `.xlsx`
