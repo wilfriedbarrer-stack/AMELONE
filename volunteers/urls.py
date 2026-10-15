@@ -4,6 +4,7 @@ from . import (
     views,
     views_administration,
     views_catalogue,
+    views_deletion,
     views_family,
     views_family_administration,
     views_organizer,
@@ -25,6 +26,7 @@ urlpatterns = [
     path("organisateur/profils-evenement/", views_profiles.event_profile_list, name="event_profile_list"),
     path("organisateur/profils-evenement/ajouter/", views_profiles.event_profile_new, name="event_profile_new"),
     path("organisateur/profils-evenement/<uuid:profile_id>/modifier/", views_profiles.event_profile_update, name="event_profile_update"),
+    path("organisateur/profils-evenement/<uuid:profile_id>/supprimer/", views_deletion.event_profile_delete, name="event_profile_delete"),
     path("organisateur/profils-evenement/<uuid:profile_id>/postes/ajouter/", views_profiles.event_profile_station_create, name="event_profile_station_create"),
     path("organisateur/profils-evenement/<uuid:profile_id>/postes/<int:station_index>/modifier/", views_profiles.event_profile_station_update, name="event_profile_station_update"),
     path("organisateur/profils-evenement/<uuid:profile_id>/postes/<int:station_index>/supprimer/", views_profiles.event_profile_station_delete, name="event_profile_station_delete"),
@@ -112,6 +114,11 @@ urlpatterns = [
         "organisateur/evenements/<uuid:event_id>/archiver/",
         views_organizer.event_archive,
         name="event_archive",
+    ),
+    path(
+        "organisateur/evenements/<uuid:event_id>/supprimer/",
+        views_deletion.event_delete,
+        name="event_delete",
     ),
     path(
         "organisateur/evenements/<uuid:event_id>/postes/ajouter/",
