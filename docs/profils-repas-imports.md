@@ -35,7 +35,8 @@ Une date ayant déjà des inscriptions ne peut pas être déplacée : créer un 
 Le participant choisit dans le même formulaire sa présence, son poste souhaité,
 son repas ou sa collation, sa boisson et son paiement souhaité :
 
-- journée complète : menus de type **repas complet** ;
+- journée complète : menus de type **repas complet**, avec choix facultatifs
+  d’une collation le matin et d’une collation l’après-midi ;
 - matin ou après-midi : menus de type **collation** ;
 - possibilité explicite de ne demander ni repas ni collation ;
 - paiement au comptoir ou via lien SumUp.
@@ -48,6 +49,20 @@ règlement reçu ; l’organisateur enregistre les paiements comme auparavant.
 Les choix existants et leurs suppléments sont conservés. Modifier les tarifs ne
 recalcule pas les réservations précédentes. Un menu déjà réservé ne peut changer
 de type si cela rend les réservations actives incompatibles.
+Les officiels ne paient aucun supplément, y compris pour ces deux collations
+et la boisson. Les collations supplémentaires ne sont proposées qu’à la journée.
+
+## Catalogue commun à tous les événements
+
+Ouvrir **Administration → Menus et boissons** pour créer, modifier ou désactiver
+les repas, collations et boissons communs. Les choix actifs sont proposés
+automatiquement sur tous les événements, y compris ceux déjà créés. Les tarifs
+enregistrés sur les réservations antérieures restent conservés.
+
+Les anciennes options propres à une date restent disponibles pour cette date.
+Pour les proposer partout, utiliser **Rendre commun** et confirmer : les choix
+déjà réservés sont conservés. Un conflit de nom est signalé avant validation.
+Une désactivation retire l’option des nouveaux choix sans supprimer les commandes.
 
 ## Importer des menus ou boissons
 
@@ -73,7 +88,9 @@ Jus de pomme;Verre;1,50
 
 Seul `nom` est obligatoire. Un montant absent vaut 0 ; un type absent vaut repas
 complet. Les valeurs `full_meal` et `snack` sont également acceptées. Les noms sont
-uniques par date : un nom existant sera mis à jour seulement après confirmation
+uniques par date pour l’import local. Dans le catalogue commun, les menus sont
+identifiés par leur nom et leur type, les boissons par leur nom : un choix
+existant sera mis à jour seulement après confirmation
 explicite. L’aperçu affiche toutes les lignes et erreurs ; l’import n’applique
 aucun changement si une ligne est invalide. Un aperçu expire après 15 minutes et
 ne peut être confirmé deux fois. Aucune réservation n’est supprimée.
@@ -83,10 +100,24 @@ ne peut être confirmé deux fois. Aucune réservation n’est supprimée.
 **Postes** : participants, date, présence, poste, période (journée, matin,
 après-midi) et état de l’affectation. Les participants non affectés sont inclus.
 
-**Repas** : présence, formule, menu, boisson, mode de paiement souhaité et
+**Repas** : présence, formule, menu, collations du matin et de l’après-midi,
+boisson, mode de paiement souhaité et
 supplément par participant, puis les quantités à préparer. Les absences de choix
 et les refus de repas sont distincts. L’organisateur peut renseigner un choix
 manquant depuis ce rapport.
 
 Les deux rapports disposent de leur export CSV et d’une vue imprimable. Ils sont
 réservés aux organisateurs ; aucun récapitulatif nominatif de repas n’est public.
+
+## Tickets nominatifs : six par feuille A4
+
+Dans un événement, ouvrir **Tickets repas**. Choisir éventuellement une date
+ou une personne, puis **Imprimer les tickets**. Le navigateur permet aussi
+d’enregistrer un PDF : choisir A4, portrait, échelle 100 % et désactiver ses
+en-têtes et pieds de page.
+
+Chaque ticket indique le nom du participant, l’événement, la date, le repas
+ou la collation, les deux collations facultatives et la boisson choisis.
+Les inscriptions annulées et les personnes sans repas ne produisent pas de ticket.
+Six emplacements sont disposés sur chaque feuille, avec des emplacements vides
+sur la dernière si nécessaire. L’impression ne modifie ni réservation ni paiement.

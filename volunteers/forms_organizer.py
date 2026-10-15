@@ -22,7 +22,12 @@ from .forms_eligibility import (
     slot_choice_label,
     station_choice_label,
 )
-from .forms_family import configure_official_meal_pricing
+from .forms_family import (
+    clean_snack_choices,
+    configure_official_meal_pricing,
+    configure_snack_fields,
+)
+from .meal_catalogue import beverage_options_for_day, menu_options_for_day
 from .models import (
     Assignment,
     Attendance,
@@ -388,7 +393,7 @@ class BeverageForm(PricedOptionFormMixin):
 class MealOrderOrganizerForm(OrganizerFormMixin, forms.ModelForm):
     class Meta:
         model = MealOrder
-        fields = ("wants_meal", "menu", "beverage", "payment_method")
+        fields = ("wants_meal", "menu", "morning_snack", "afternoon_snack", "beverage", "payment_method")
 
     def __init__(self, *args, registration=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -400,8 +405,10 @@ class MealOrderOrganizerForm(OrganizerFormMixin, forms.ModelForm):
         allowed = Q(is_active=True, meal_type=expected) | Q(pk=self.instance.menu_id, meal_type=expected)
         if registration and self.instance.legacy_choice_availability == registration.availability:
             allowed |= Q(pk=self.instance.menu_id)
-        self.fields["menu"].queryset = Menu.objects.filter(event_day=day).filter(allowed).order_by("name") if day else Menu.objects.none()
-        self.fields["beverage"].queryset = Beverage.objects.filter(event_day=day).filter(Q(is_active=True) | Q(pk=self.instance.beverage_id)).order_by("name") if day else Beverage.objects.none()
+        self.fields["menu"].queryset = menu_options_for_day(day, active_only=False).filter(allowed).order_by("name") if day else Menu.objects.none()
+        self.fields["beverage"].queryset = beverage_options_for_day(day, active_only=False).filter(Q(is_active=True) | Q(pk=self.instance.beverage_id)).order_by("name") if day else Beverage.objects.none()
+        if day:
+            configure_snack_fields(self, day, registration.availability, self.instance)
         configure_official_meal_pricing(
             self, registration.member if registration else None,
             self.instance if self.instance.pk and not self.instance._state.adding else None,
@@ -410,6 +417,11 @@ class MealOrderOrganizerForm(OrganizerFormMixin, forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         wants_meal = cleaned.get("wants_meal")
+        clean_snack_choices(
+            self, cleaned,
+            availability=self.registration.availability if self.registration else None,
+            no_meal=not wants_meal,
+        )
         if wants_meal and cleaned.get("menu") is None:
             self.add_error("menu", "Choisissez un menu.")
         if not wants_meal and (cleaned.get("menu") or cleaned.get("beverage")):

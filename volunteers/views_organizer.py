@@ -1,4 +1,5 @@
 import csv
+from collections import Counter
 from functools import wraps
 
 from django.conf import settings
@@ -29,6 +30,7 @@ from .forms_organizer import (
     TrackingFilterForm,
 )
 from .forms_profiles import ProfileEventCreationForm
+from .meal_catalogue import beverage_options_for_day, menu_options_for_day
 from .models import (
     Assignment,
     Attendance,
@@ -609,15 +611,38 @@ def event_emails(request, event_id):
 @organizer_required
 def catering(request, event_id):
     event = get_object_or_404(Event.objects.prefetch_related("days__menus", "days__beverages"), pk=event_id)
-    orders = MealOrder.objects.filter(registration__event_day__event=event).select_related(
-        "registration__member__family", "registration__event_day", "menu", "beverage"
+    orders = MealOrder.objects.filter(
+        registration__event_day__event=event, registration__status=Registration.Status.ACTIVE,
+    ).select_related(
+        "registration__member__family", "registration__event_day", "menu", "beverage",
+        "morning_snack", "afternoon_snack",
     )
-    menu_totals = orders.values("registration__event_day__date", "menu__name").annotate(
-        quantity=Count("id")
-    )
-    beverage_totals = orders.exclude(beverage=None).values(
-        "registration__event_day__date", "beverage__name"
-    ).annotate(quantity=Count("id"))
+    menu_quantities, drink_quantities = Counter(), Counter()
+    for order in orders:
+        if not order.wants_meal:
+            continue
+        day_date = order.registration.event_day.date
+        foods = (
+            (order.menu, order.menu.get_meal_type_display() if order.menu else "Repas"),
+            (order.morning_snack, "Collation matin"),
+            (order.afternoon_snack, "Collation après-midi"),
+        )
+        for food, label in foods:
+            if food:
+                menu_quantities[(day_date, label, food.name)] += 1
+        if order.beverage:
+            drink_quantities[(day_date, order.beverage.name)] += 1
+    menu_totals = [
+        {"date": date, "type": label, "name": name, "quantity": count}
+        for (date, label, name), count in sorted(menu_quantities.items())
+    ]
+    beverage_totals = [
+        {"date": date, "name": name, "quantity": count}
+        for (date, name), count in sorted(drink_quantities.items())
+    ]
+    for day in event.days.all():
+        day.offered_menus = menu_options_for_day(day, active_only=False)
+        day.offered_beverages = beverage_options_for_day(day, active_only=False)
     return render(
         request,
         "volunteers/organizer/catering.html",
@@ -679,6 +704,8 @@ def meal_order_update(request, order_id):
                 registration=order.registration,
                 menu=form.cleaned_data["menu"],
                 beverage=form.cleaned_data["beverage"],
+                morning_snack=form.cleaned_data.get("morning_snack"),
+                afternoon_snack=form.cleaned_data.get("afternoon_snack"),
                 no_meal=not form.cleaned_data["wants_meal"],
                 payment_method=form.cleaned_data["payment_method"],
                 actor=request.user,
@@ -703,9 +730,12 @@ def catering_export(request, event_id):
     response["Content-Disposition"] = f'attachment; filename="repas-{event.pk}.csv"'
     response.write("\ufeff")
     writer = csv.writer(response, delimiter=";")
-    writer.writerow(["Date", "Famille", "Membre", "Menu", "Boisson", "Supplément (€)"])
-    orders = MealOrder.objects.filter(registration__event_day__event=event).select_related(
-        "registration__event_day", "registration__member__family", "menu", "beverage"
+    writer.writerow(["Date", "Famille", "Membre", "Menu", "Boisson", "Collation matin", "Collation après-midi", "Supplément (€)"])
+    orders = MealOrder.objects.filter(
+        registration__event_day__event=event, registration__status=Registration.Status.ACTIVE,
+    ).select_related(
+        "registration__event_day", "registration__member__family", "menu", "beverage",
+        "morning_snack", "afternoon_snack",
     )
     for order in orders:
         writer.writerow(
@@ -715,6 +745,8 @@ def catering_export(request, event_id):
                 order.registration.member.full_name,
                 order.menu.name if order.menu else "Pas de repas",
                 order.beverage.name if order.beverage else "",
+                order.morning_snack.name if order.morning_snack else "",
+                order.afternoon_snack.name if order.afternoon_snack else "",
                 f"{order.total_surcharge_cents / 100:.2f}".replace(".", ","),
             ]
         )
@@ -865,12 +897,16 @@ def tracking_export(request):
 @organizer_required
 def menu_update(request, menu_id):
     menu = get_object_or_404(Menu.objects.select_related("event_day__event"), pk=menu_id)
+    if menu.event_day_id is None:
+        return redirect("shared_catalogue_update", kind="menus", option_id=menu.pk)
     return _priced_option_form(request, menu.event_day, Menu, MenuForm, instance=menu)
 
 
 @organizer_required
 def beverage_update(request, beverage_id):
     beverage = get_object_or_404(Beverage.objects.select_related("event_day__event"), pk=beverage_id)
+    if beverage.event_day_id is None:
+        return redirect("shared_catalogue_update", kind="boissons", option_id=beverage.pk)
     return _priced_option_form(request, beverage.event_day, Beverage, BeverageForm, instance=beverage)
 
 
@@ -883,7 +919,14 @@ def meal_order_create(request, registration_id):
     form = MealOrderOrganizerForm(request.POST or None, instance=MealOrder(registration=registration), registration=registration)
     if request.method == "POST" and form.is_valid():
         try:
-            save_meal_order(registration=registration, menu=form.cleaned_data["menu"], beverage=form.cleaned_data["beverage"], no_meal=not form.cleaned_data["wants_meal"], payment_method=form.cleaned_data["payment_method"], actor=request.user)
+            save_meal_order(
+                registration=registration, menu=form.cleaned_data["menu"],
+                beverage=form.cleaned_data["beverage"],
+                morning_snack=form.cleaned_data.get("morning_snack"),
+                afternoon_snack=form.cleaned_data.get("afternoon_snack"),
+                no_meal=not form.cleaned_data["wants_meal"],
+                payment_method=form.cleaned_data["payment_method"], actor=request.user,
+            )
         except ValidationError as error:
             for text in _form_error_messages(error):
                 form.add_error(None, text)

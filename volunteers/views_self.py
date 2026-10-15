@@ -47,7 +47,10 @@ def personal_participation(request):
     if member:
         shared_sumup_url = SiteBranding.objects.filter(pk=1).values_list("sumup_payment_url", flat=True).first() or ""
         registrations = Registration.objects.filter(member=member, status=Registration.Status.ACTIVE)
-        registrations = registrations.select_related("event_day__event", "meal_order__menu").prefetch_related(
+        registrations = registrations.select_related(
+            "event_day__event", "meal_order__menu", "meal_order__beverage",
+            "meal_order__morning_snack", "meal_order__afternoon_snack",
+        ).prefetch_related(
             "assignments__station_slot__station",
         ).order_by("event_day__date")
         for registration in registrations:
@@ -123,6 +126,7 @@ def personal_registration(request, event_day_id):
             if form.meal_choices_open:
                 choices = {key: form.cleaned_data[key] for key in
                            ("menu", "beverage", "no_meal", "payment_method")}
+                choices.update({key: form.cleaned_data.get(key) for key in ("morning_snack", "afternoon_snack")})
             saved = save_personal_participation(
                 actor=request.user, event_day=day, availability=form.cleaned_data["availability"],
                 preferred_station=form.cleaned_data.get("preferred_station"),

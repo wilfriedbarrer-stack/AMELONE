@@ -1,0 +1,44 @@
+{% extends "base.html" %}{% load static i18n %}
+{% block title %}Tickets nominatifs — {{ event.name }}{% endblock %}
+{% block body_class %}meal-tickets-page{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/meal-tickets.css' %}?v=1">{% endblock %}
+{% block content %}
+<header class="page-header no-print">
+  <div class="shell header-copy">
+    <div><span class="eyebrow">{{ event.name }}</span><h1>Tickets nominatifs</h1><p>Un ticket par participant et par journée, avec les choix de restauration réservés.</p></div>
+    <div class="button-row"><button class="button button-primary" type="button" onclick="window.print()"{% if not tickets %} disabled{% endif %}>Imprimer / Enregistrer en PDF</button><a class="button button-secondary" href="{% url 'recap_meals' event.pk %}">Retour au récapitulatif</a></div>
+  </div>
+</header>
+<div class="shell page-stack ticket-workspace">
+  <form method="get" class="filter-bar no-print" aria-label="Filtrer les tickets">
+    {% include "partials/form_fields.html" with form=form %}
+    <button class="button button-secondary" type="submit">Afficher les tickets</button>
+    <a href="{% url 'meal_tickets' event.pk %}">Réinitialiser</a>
+  </form>
+  {% if tickets %}
+  <div class="ticket-summary no-print"><p><strong>{{ tickets|length }} ticket{{ tickets|length|pluralize }} · {{ sheets|length }} feuille{{ sheets|length|pluralize }} A4</strong><br>6 emplacements par feuille, en 2 colonnes et 3 lignes. Pour le PDF, choisissez « Enregistrer au format PDF » dans la fenêtre d’impression.</p><p class="muted">Format A4 portrait, échelle 100 %. Désactivez les en-têtes et pieds de page de votre navigateur.</p></div>
+  <div class="meal-ticket-sheets">
+    {% for sheet in sheets %}
+    <section class="meal-ticket-sheet" aria-label="Feuille {{ forloop.counter }} sur {{ sheets|length }}">
+      {% for ticket in sheet %}
+      {% if ticket %}
+      <article class="meal-ticket">
+        <div class="meal-ticket-brand">AMELONE LOISIRS <span>Restauration</span></div>
+        <div class="meal-ticket-event"><strong>{{ ticket.event_name }}</strong><span>{% language "fr" %}{{ ticket.event_date|date:"l j F Y" }}{% endlanguage %}</span></div>
+        <h2 class="meal-ticket-name">{{ ticket.full_name }}</h2>
+        <dl class="meal-ticket-choices">
+          <div><dt>{{ ticket.meal_type_label }}</dt><dd>{{ ticket.menu_name }}</dd></div>
+          {% if ticket.morning_snack_name %}<div><dt>Collation du matin</dt><dd>{{ ticket.morning_snack_name }}</dd></div>{% endif %}
+          {% if ticket.afternoon_snack_name %}<div><dt>Collation de l’après-midi</dt><dd>{{ ticket.afternoon_snack_name }}</dd></div>{% endif %}
+          <div><dt>Boisson</dt><dd>{{ ticket.beverage_name }}</dd></div>
+        </dl>
+        <div class="meal-ticket-reference">{% if ticket.official_exemption %}<span class="meal-ticket-official">Officiel — sans supplément</span>{% endif %}{{ ticket.reference }}</div>
+      </article>
+      {% else %}<div class="meal-ticket meal-ticket-empty" aria-hidden="true"></div>{% endif %}
+      {% endfor %}
+    </section>
+    {% endfor %}
+  </div>
+  {% else %}<section class="panel state-card no-print"><h2>Aucun ticket à imprimer</h2><p>Les tickets sont proposés pour les participants inscrits avec un repas ou une collation réservé. Modifiez les filtres ou renseignez leurs choix de restauration.</p><a class="button button-secondary" href="{% url 'recap_meals' event.pk %}">Voir les repas des participants</a></section>{% endif %}
+</div>
+{% endblock %}

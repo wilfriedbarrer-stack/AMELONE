@@ -1,0 +1,7 @@
+{% load volunteer_extras %}
+<section class="panel table-panel">
+  <div class="panel-heading"><div><span class="eyebrow">Commun à tous les événements</span><h2>{{ title }}</h2></div></div>
+  <div class="responsive-table"><table><thead><tr><th>Nom</th><th>Description</th><th>Supplément</th><th>État</th><th>Action</th></tr></thead><tbody>
+    {% for option in options %}<tr><td data-label="Nom"><strong>{{ option.name }}</strong></td><td data-label="Description">{{ option.description|default:"—" }}</td><td data-label="Supplément">{{ option.surcharge_cents|euros }}</td><td data-label="État">{% if option.is_active %}<span class="badge badge-success">Actif</span>{% else %}<span class="badge badge-neutral">Inactif</span>{% endif %}</td><td data-label="Action"><a href="{% url 'shared_catalogue_update' kind option.pk %}">Modifier</a></td></tr>{% empty %}<tr><td colspan="5">Aucun choix commun pour le moment.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>

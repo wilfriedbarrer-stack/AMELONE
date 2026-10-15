@@ -14,9 +14,51 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .forms_eligibility import eligible_stations, station_requirements_label
+from .meal_catalogue import beverage_options_for_day, menu_options_for_day
 from .models import Beverage, Family, MealOrder, Member, Menu, Registration, Station
 
 User = get_user_model()
+SNACK_FIELDS = ("morning_snack", "afternoon_snack")
+MEAL_COMPONENT_FIELDS = ("menu", *SNACK_FIELDS, "beverage")
+
+
+def meal_option_label(option, *, official=False):
+    origin = "Commun" if option.event_day_id is None else "Spécifique à cet événement"
+    cents = 0 if official else option.surcharge_cents
+    price = f"{cents / 100:.2f}".replace(".", ",")
+    return f"{option.name} — {origin} — {price} €" + (" (officiel)" if official else "")
+
+
+def configure_snack_fields(form, event_day, availability, order=None):
+    form.meal_availability = availability
+    for name, label in (("morning_snack", "Collation du matin (facultatif)"),
+                        ("afternoon_snack", "Collation de l’après-midi (facultatif)")):
+        old_id = getattr(order, f"{name}_id", None) if order else None
+        queryset = menu_options_for_day(event_day, active_only=False).filter(
+            Q(is_active=True, meal_type=Menu.MealType.SNACK)
+            | Q(pk=old_id, meal_type=Menu.MealType.SNACK)
+        ).order_by("name", "event_day_id")
+        form.fields[name] = forms.ModelChoiceField(
+            label=label, queryset=queryset, required=False, empty_label="Sans collation",
+        )
+        if availability != Registration.Availability.FULL_DAY and "availability" not in form.fields:
+            form.fields[name].widget = forms.HiddenInput()
+        elif order:
+            form.initial[name] = old_id
+
+
+def clean_snack_choices(form, cleaned, *, availability, no_meal):
+    for name in SNACK_FIELDS:
+        cleaned.setdefault(name, None)
+    if availability != Registration.Availability.FULL_DAY and any(
+        form.data.get(form.add_prefix(name)) for name in SNACK_FIELDS
+    ):
+        form.add_error(None, "Les collations du matin et de l’après-midi sont réservées à une présence à la journée.")
+    if no_meal and any(cleaned.get(name) for name in SNACK_FIELDS):
+        form.add_error(None, "Retirez les collations choisies ou décochez le choix sans repas ni collation.")
+    if no_meal:
+        for name in SNACK_FIELDS:
+            cleaned[name] = None
 
 
 def official_meal_exemption(member, meal_order=None, *, reactivating=False):
@@ -33,14 +75,12 @@ def official_meal_exemption(member, meal_order=None, *, reactivating=False):
 def configure_official_meal_pricing(form, member, meal_order=None, *, reactivating=False):
     """Présente le tarif personnel issu de l'habilitation du membre."""
     form.official_exemption = official_meal_exemption(member, meal_order, reactivating=reactivating)
-    if not form.official_exemption:
-        return
-    for name in ("menu", "beverage"):
+    for name in MEAL_COMPONENT_FIELDS:
         if name in form.fields:
             form.fields[name].label_from_instance = (
-                lambda option: f"{option.name} — 0,00 € (officiel)"
+                lambda option: meal_option_label(option, official=form.official_exemption)
             )
-    if "payment_method" in form.fields:
+    if form.official_exemption and "payment_method" in form.fields:
         field = form.fields["payment_method"]
         field.widget = forms.HiddenInput()
         field.disabled = True
@@ -227,7 +267,7 @@ class FamilyRegistrationForm(forms.Form):
         if self.meal_choices_open:
             availability = self.data.get("availability") if self.is_bound else self.initial.get("availability", Registration.Availability.FULL_DAY)
             expected = Menu.MealType.FULL_MEAL if availability == Registration.Availability.FULL_DAY else Menu.MealType.SNACK
-            menus = Menu.objects.filter(event_day=event_day).filter(Q(is_active=True) | Q(pk=order.menu_id if order else None))
+            menus = menu_options_for_day(event_day, active_only=False).filter(Q(is_active=True) | Q(pk=order.menu_id if order else None))
             allowed = Q(is_active=True, meal_type=expected)
             if order:
                 allowed |= Q(pk=order.menu_id, meal_type=expected)
@@ -235,11 +275,13 @@ class FamilyRegistrationForm(forms.Form):
                     allowed |= Q(pk=order.menu_id)
             self.fields["no_meal"] = forms.BooleanField(label="Je ne souhaite pas de repas ni de collation", required=False)
             self.fields["menu"] = forms.ModelChoiceField(label="Repas complet ou collation", queryset=menus.filter(allowed).order_by("name"), required=False, empty_label="Choisir selon la présence")
-            self.fields["beverage"] = forms.ModelChoiceField(label="Boisson", queryset=Beverage.objects.filter(event_day=event_day).filter(Q(is_active=True) | Q(pk=order.beverage_id if order else None)).order_by("name"), required=False, empty_label="Sans boisson")
+            self.fields["beverage"] = forms.ModelChoiceField(label="Boisson", queryset=beverage_options_for_day(event_day, active_only=False).filter(Q(is_active=True) | Q(pk=order.beverage_id if order else None)).order_by("name"), required=False, empty_label="Sans boisson")
+            configure_snack_fields(self, event_day, availability, order)
             self.fields["payment_method"] = forms.ChoiceField(label="Mode de paiement souhaité", choices=MealOrder.PaymentMethod.choices, initial=MealOrder.PaymentMethod.COUNTER, required=False)
             self.initial.update({"no_meal": not order.wants_meal if order else not menus.filter(allowed).exists(), "menu": order.menu_id if order else None, "beverage": order.beverage_id if order else None, "payment_method": order.payment_method if order else MealOrder.PaymentMethod.COUNTER})
             for menu in menus:
-                self.menu_options.append({"id": str(menu.pk), "name": menu.name, "type": menu.meal_type, "surcharge": 0 if self.official_exemption else menu.surcharge_cents, "legacy": order.legacy_choice_availability if order and order.menu_id == menu.pk else ""})
+                self.menu_options.append({"id": str(menu.pk), "name": menu.name, "label": meal_option_label(menu, official=self.official_exemption), "type": menu.meal_type, "surcharge": 0 if self.official_exemption else menu.surcharge_cents, "legacy": order.legacy_choice_availability if order and order.menu_id == menu.pk else ""})
+            self.order_fields(("availability", "preferred_station", "note", "no_meal", "menu", *SNACK_FIELDS, "beverage", "payment_method"))
         configure_official_meal_pricing(self, self.member, order, reactivating=True)
 
     def clean(self):
@@ -247,11 +289,12 @@ class FamilyRegistrationForm(forms.Form):
         if not self.meal_choices_open:
             return cleaned
         no_meal = cleaned.get("no_meal", False)
+        clean_snack_choices(self, cleaned, availability=cleaned.get("availability"), no_meal=no_meal)
         menu, beverage = cleaned.get("menu"), cleaned.get("beverage")
         if no_meal and (menu or beverage):
             raise ValidationError("Décochez « Je ne souhaite pas de repas ni de collation » avant de choisir un menu ou une boisson.")
         if not no_meal and menu is None and "menu" not in self.errors:
-            if not self.fields["menu"].queryset.exists() and beverage is None:
+            if not self.fields["menu"].queryset.exists() and beverage is None and not any(cleaned.get(name) for name in SNACK_FIELDS):
                 cleaned["no_meal"] = True
             else:
                 self.add_error("menu", "Choisissez le repas ou la collation, ou indiquez que vous n’en souhaitez pas.")
@@ -296,14 +339,18 @@ class FamilyMealForm(forms.Form):
             allowed |= Q(pk=meal_order.menu_id, meal_type=expected)
             if meal_order.legacy_choice_availability == registration.availability:
                 allowed |= Q(pk=meal_order.menu_id)
-        self.fields["menu"].queryset = Menu.objects.filter(event_day=event_day).filter(allowed).order_by("name")
+        self.fields["menu"].queryset = menu_options_for_day(event_day, active_only=False).filter(allowed).order_by("name")
         self.fields["menu"].label = "Repas complet" if expected == Menu.MealType.FULL_MEAL else "Collation"
-        self.fields["beverage"].queryset = Beverage.objects.filter(event_day=event_day).filter(Q(is_active=True) | Q(pk=meal_order.beverage_id if meal_order else None)).order_by("name")
+        self.fields["beverage"].queryset = beverage_options_for_day(event_day, active_only=False).filter(Q(is_active=True) | Q(pk=meal_order.beverage_id if meal_order else None)).order_by("name")
+        configure_snack_fields(self, event_day, registration.availability, meal_order)
+        self.order_fields(("no_meal", "menu", *SNACK_FIELDS, "beverage", "payment_method"))
+        self.menu_options = []
         configure_official_meal_pricing(self, registration.member, meal_order)
 
     def clean(self):
         cleaned_data = super().clean()
         no_meal = cleaned_data.get("no_meal", False)
+        clean_snack_choices(self, cleaned_data, availability=self.registration.availability, no_meal=no_meal)
         menu = cleaned_data.get("menu")
         beverage = cleaned_data.get("beverage")
         if no_meal and (menu or beverage):

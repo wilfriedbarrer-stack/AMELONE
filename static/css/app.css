@@ -543,3 +543,12 @@ tbody tr:hover { background: #fcfdfc; }
 .print-view .site-header, .print-view .site-footer, .print-view .no-print { display: none !important; }
 .print-view .print-only { display: block; }
 .print-view .panel { box-shadow: none; }
+
+/* Catalogue commun et offres propres aux événements. */
+.shared-catalogue th, .shared-catalogue td, .shared-catalogue h2, .shared-catalogue h3, .catalogue-option { overflow-wrap: anywhere; }
+.catalogue-local-day { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+.catalogue-local-day .organizer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+.catalogue-option { min-width: 0; padding-block: .9rem; border-bottom: 1px solid var(--line); }
+.catalogue-option:last-child { border-bottom: 0; }
+.catalogue-option p { margin-block: .25rem .65rem; }
+@media (max-width: 48rem) { .catalogue-local-day .organizer-grid { grid-template-columns: minmax(0, 1fr); } }
