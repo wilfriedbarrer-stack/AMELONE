@@ -1,0 +1,6 @@
+{% if form.official_pricing_show_notice %}
+<section id="official-meal-notice" class="alert alert-info"><div>
+<strong id="official-meal-pricing-title">{% if form.official_exemption %}Officiel de compétition : aucun supplément pour le repas et la boisson.{% else %}Poste bénévole : restauration au tarif bénévole.{% endif %}</strong>
+<p id="official-meal-pricing-detail">{% if form.official_exemption %}Les collations du matin et de l’après-midi sont également sans supplément.{% else %}Un officiel inscrit à un poste bénévole règle son repas, ses collations et sa boisson comme les autres bénévoles.{% endif %}</p>
+</div></section>
+{% endif %}

@@ -50,7 +50,12 @@ Les choix existants et leurs suppléments sont conservés. Modifier les tarifs n
 recalcule pas les réservations précédentes. Un menu déjà réservé ne peut changer
 de type si cela rend les réservations actives incompatibles.
 Les officiels ne paient aucun supplément, y compris pour ces deux collations
-et la boisson. Les collations supplémentaires ne sont proposées qu’à la journée.
+et la boisson, lorsqu’ils ne sont pas inscrits sur un poste bénévole ce jour-là.
+Un poste bénévole actif, même en brouillon ou combiné avec un poste officiel,
+rétablit les tarifs réservés pour cette journée. Sans affectation active, le poste
+souhaité est pris en compte. Le changement de poste actualise les suppléments et
+le solde ; les paiements déjà enregistrés et l’historique restent conservés.
+Les collations supplémentaires ne sont proposées qu’à la journée.
 
 ## Catalogue commun à tous les événements
 
@@ -124,6 +129,14 @@ en-têtes et pieds de page.
 
 Chaque ticket indique le nom du participant, l’événement, la date, le repas
 ou la collation, les deux collations facultatives et la boisson choisis.
+Le logo de l’association apparaît sur chaque ticket. La mention **Note famille
+soldée** ou **Note famille non soldée** reprend le solde de la famille pour tout
+l’événement, même si l’impression est filtrée par date ou participant. Elle est
+recalculée à chaque consultation et réimpression depuis les paiements enregistrés.
+Le montant restant est affiché uniquement pour une note non soldée. Ce montant
+familial est commun aux tickets d’une même famille : il ne faut pas les additionner.
+Une note sans supplément est soldée ; le choix d’un mode de paiement ne vaut pas
+enregistrement d’un règlement.
 Les inscriptions annulées et les personnes sans repas ne produisent pas de ticket.
 Six emplacements sont disposés sur chaque feuille, avec des emplacements vides
 sur la dernière si nécessaire. L’impression ne modifie ni réservation ni paiement.

@@ -15,18 +15,27 @@ from django.utils import timezone
 
 from .forms_eligibility import eligible_stations, station_requirements_label
 from .meal_catalogue import beverage_options_for_day, menu_options_for_day
-from .models import Beverage, Family, MealOrder, Member, Menu, Registration, Station
+from .models import Beverage, Event, Family, MealOrder, Member, Menu, Registration, Station
+from .official_pricing import registration_has_official_meal_exemption
 
 User = get_user_model()
 SNACK_FIELDS = ("morning_snack", "afternoon_snack")
 MEAL_COMPONENT_FIELDS = ("menu", *SNACK_FIELDS, "beverage")
 
 
-def meal_option_label(option, *, official=False):
+def meal_option_label(option, *, official=False, surcharge_cents=None):
     origin = "Commun" if option.event_day_id is None else "Spécifique à cet événement"
-    cents = 0 if official else option.surcharge_cents
+    standard = option.surcharge_cents if surcharge_cents is None else surcharge_cents
+    cents = 0 if official else standard
     price = f"{cents / 100:.2f}".replace(".", ",")
     return f"{option.name} — {origin} — {price} €" + (" (officiel)" if official else "")
+
+
+def _meal_component_surcharge(option, component, meal_order=None):
+    if meal_order and option.pk == getattr(meal_order, f"{component}_id"):
+        standard = getattr(meal_order, f"{component}_standard_surcharge_cents")
+        return getattr(meal_order, f"{component}_surcharge_cents") if standard is None else standard
+    return option.surcharge_cents
 
 
 def configure_snack_fields(form, event_day, availability, order=None):
@@ -61,32 +70,105 @@ def clean_snack_choices(form, cleaned, *, availability, no_meal):
             cleaned[name] = None
 
 
-def official_meal_exemption(member, meal_order=None, *, reactivating=False):
+def _pricing_registration(form, member, meal_order=None):
+    return (
+        getattr(form, "registration", None)
+        or (meal_order.registration if meal_order else None)
+        or Registration(member=member, event_day=form.event_day)
+    )
+
+
+def official_meal_exemption(member, meal_order=None, *, reactivating=False, form=None):
     if meal_order:
         registration = meal_order.registration
         if (
             registration.event_day.date < timezone.localdate()
+            or registration.event_day.event.status == Event.Status.ARCHIVED
             or (registration.status != Registration.Status.ACTIVE and not reactivating)
         ):
             return meal_order.official_exemption_applied
-    return bool(member and member.is_competition_official)
+    if not member:
+        return False
+    if form is None:
+        return registration_has_official_meal_exemption(
+            meal_order.registration, member=member,
+        ) if meal_order else bool(member.is_competition_official)
+    registration = _pricing_registration(form, member, meal_order)
+    overrides = {}
+    if "station_slots" in form.fields:
+        # L'administrateur remplace ses affectations par les cases cochées.
+        field = form.fields["station_slots"]
+        if form.is_bound:
+            key = form.add_prefix("station_slots")
+            selected = form.data.getlist(key) if hasattr(form.data, "getlist") else form.data.get(key, [])
+        else:
+            selected = form.initial.get("station_slots", [])
+        if not isinstance(selected, (list, tuple)):
+            selected = [selected]
+        try:
+            selected_slots = field.queryset.filter(pk__in=selected)
+        except (ValidationError, ValueError):
+            selected_slots = field.queryset.none()
+        overrides.update(station_slots=selected_slots, preferred_station=None)
+    elif "preferred_station" in form.fields:
+        selected = form.data.get(form.add_prefix("preferred_station")) if form.is_bound else form.initial.get("preferred_station")
+        try:
+            preferred = form.fields["preferred_station"].queryset.filter(pk=selected).first() if selected else None
+        except (ValidationError, ValueError):
+            preferred = None  # Le ModelChoiceField signalera la valeur forgée.
+        overrides["preferred_station"] = preferred
+    return registration_has_official_meal_exemption(registration, member=member, **overrides)
 
 
 def configure_official_meal_pricing(form, member, meal_order=None, *, reactivating=False):
-    """Présente le tarif personnel issu de l'habilitation du membre."""
-    form.official_exemption = official_meal_exemption(member, meal_order, reactivating=reactivating)
+    """Présente le tarif du rôle tenu, et les données du changement de poste."""
+    form.official_exemption = official_meal_exemption(member, meal_order, reactivating=reactivating, form=form)
+    dynamic = "preferred_station" in form.fields or "station_slots" in form.fields
+    form.official_pricing_show_notice = bool(member and member.is_competition_official) or form.official_exemption
+    option_prices = {}
     for name in MEAL_COMPONENT_FIELDS:
         if name in form.fields:
+            options = list(form.fields[name].queryset)
+            prices = {option.pk: _meal_component_surcharge(option, name, meal_order) for option in options}
             form.fields[name].label_from_instance = (
-                lambda option: meal_option_label(option, official=form.official_exemption)
+                lambda option, prices=prices: meal_option_label(
+                    option, official=form.official_exemption, surcharge_cents=prices.get(option.pk),
+                )
             )
-    if form.official_exemption and "payment_method" in form.fields:
+            option_prices[name] = [
+                {"id": str(option.pk), "standard": meal_option_label(option, surcharge_cents=prices[option.pk]),
+                 "standard_surcharge": prices[option.pk], "official": meal_option_label(option, official=True)}
+                for option in options
+            ]
+    for option in getattr(form, "menu_options", []):
+        option["label"] = option["official_label"] if form.official_exemption else option["standard_label"]
+        option["surcharge"] = 0 if form.official_exemption else option["standard_surcharge"]
+    if "payment_method" in form.fields:
         field = form.fields["payment_method"]
-        field.widget = forms.HiddenInput()
-        field.disabled = True
-        field.required = False
-        field.initial = MealOrder.PaymentMethod.COUNTER
-        form.initial["payment_method"] = MealOrder.PaymentMethod.COUNTER
+        field.disabled = form.official_exemption
+        if form.official_exemption:
+            if not dynamic:
+                field.widget = forms.HiddenInput()
+            field.required = False
+            field.initial = MealOrder.PaymentMethod.COUNTER
+            form.initial["payment_method"] = MealOrder.PaymentMethod.COUNTER
+    registration = _pricing_registration(form, member, meal_order) if member else None
+    categories = set(registration.assignments.exclude(status="cancelled").values_list(
+        "station_slot__station__category", flat=True,
+    )) if registration else set()
+    historical = bool(meal_order and (
+        registration.event_day.date < timezone.localdate()
+        or registration.event_day.event.status == Event.Status.ARCHIVED
+        or (registration.status != Registration.Status.ACTIVE and not reactivating)
+    ))
+    form.official_pricing_data = {
+        "eligible": bool(member and member.is_competition_official),
+        "fixed_exemption": form.official_exemption if historical or not dynamic else None,
+        "has_assignments": bool(categories), "has_volunteer_assignment": "volunteer" in categories,
+        "stations": {str(station.pk): station.category for station in form.fields["preferred_station"].queryset} if "preferred_station" in form.fields else {},
+        "slots": {str(slot.pk): slot.station.category for slot in form.fields["station_slots"].queryset} if "station_slots" in form.fields else None,
+        "option_prices": option_prices,
+    }
 
 
 class SignUpForm(UserCreationForm):
@@ -263,7 +345,7 @@ class FamilyRegistrationForm(forms.Form):
         self.meal_choices_open = allow_closed_meals or event_day.event.meal_orders_are_open()
         self.menu_options = []
         order = MealOrder.objects.filter(registration=registration).first() if registration else None
-        self.official_exemption = official_meal_exemption(self.member, order, reactivating=True)
+        self.official_exemption = official_meal_exemption(self.member, order, reactivating=True, form=self)
         if self.meal_choices_open:
             availability = self.data.get("availability") if self.is_bound else self.initial.get("availability", Registration.Availability.FULL_DAY)
             expected = Menu.MealType.FULL_MEAL if availability == Registration.Availability.FULL_DAY else Menu.MealType.SNACK
@@ -280,7 +362,8 @@ class FamilyRegistrationForm(forms.Form):
             self.fields["payment_method"] = forms.ChoiceField(label="Mode de paiement souhaité", choices=MealOrder.PaymentMethod.choices, initial=MealOrder.PaymentMethod.COUNTER, required=False)
             self.initial.update({"no_meal": not order.wants_meal if order else not menus.filter(allowed).exists(), "menu": order.menu_id if order else None, "beverage": order.beverage_id if order else None, "payment_method": order.payment_method if order else MealOrder.PaymentMethod.COUNTER})
             for menu in menus:
-                self.menu_options.append({"id": str(menu.pk), "name": menu.name, "label": meal_option_label(menu, official=self.official_exemption), "type": menu.meal_type, "surcharge": 0 if self.official_exemption else menu.surcharge_cents, "legacy": order.legacy_choice_availability if order and order.menu_id == menu.pk else ""})
+                standard = _meal_component_surcharge(menu, "menu", order)
+                self.menu_options.append({"id": str(menu.pk), "name": menu.name, "label": meal_option_label(menu, official=self.official_exemption, surcharge_cents=standard), "standard_label": meal_option_label(menu, surcharge_cents=standard), "official_label": meal_option_label(menu, official=True), "type": menu.meal_type, "surcharge": 0 if self.official_exemption else standard, "standard_surcharge": standard, "legacy": order.legacy_choice_availability if order and order.menu_id == menu.pk else ""})
             self.order_fields(("availability", "preferred_station", "note", "no_meal", "menu", *SNACK_FIELDS, "beverage", "payment_method"))
         configure_official_meal_pricing(self, self.member, order, reactivating=True)
 

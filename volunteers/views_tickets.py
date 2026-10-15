@@ -1,12 +1,17 @@
 """Tickets nominatifs de restauration, réservés à l’organisation."""
 
+from urllib.parse import urlencode
+
 from django import forms
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET
 
 from .forms_organizer import OrganizerFormMixin
 from .models import Event, EventDay, MealOrder, Member, Menu, Registration
+from .services import family_event_balance
 from .views_organizer import organizer_required
 
 
@@ -40,11 +45,12 @@ class MealTicketFilterForm(OrganizerFormMixin, forms.Form):
         ).select_related("family").distinct().order_by("last_name", "first_name", "pk")
 
 
-def _ticket_row(order, event):
+def _ticket_row(order, event, balance):
     registration = order.registration
     member = registration.member
     morning = order.morning_snack
     afternoon = order.afternoon_snack
+    remaining_cents = balance["amount_remaining_cents"]
     return {
         "member_id": member.pk,
         "first_name": member.first_name,
@@ -66,9 +72,15 @@ def _ticket_row(order, event):
         "reference": f"REP-{order.pk.hex[:12].upper()}",
         "official_exemption": order.official_exemption_applied,
         "is_official": order.official_exemption_applied,
+        "note_settled": remaining_cents == 0,
+        "note_remaining_cents": remaining_cents,
+        "note_status_label": (
+            "Note famille soldée" if remaining_cents == 0 else "Note famille non soldée"
+        ),
     }
 
 
+@never_cache
 @organizer_required
 @require_GET
 def meal_tickets(request, event_id):
@@ -97,14 +109,28 @@ def meal_tickets(request, event_id):
         "registration__event_day__date", "registration__member__last_name",
         "registration__member__first_name", "registration__member_id", "pk",
     )
-    tickets = [_ticket_row(order, event) for order in orders]
+    tickets = []
+    family_balances = {}
+    for order in orders:
+        family = order.registration.member.family
+        if family.pk not in family_balances:
+            # Always use the entire family/event account, independently of ticket filters.
+            family_balances[family.pk] = family_event_balance(family=family, event=event)
+        tickets.append(_ticket_row(order, event, family_balances[family.pk]))
     sheets = [tickets[index:index + 6] for index in range(0, len(tickets), 6)]
     for sheet in sheets:
         sheet.extend([None] * (6 - len(sheet)))
+    print_filters = {"print": "1"}
+    if selected_day:
+        print_filters["day"] = str(selected_day.pk)
+    if member_filter:
+        print_filters["member"] = str(member_filter.pk)
     return render(request, "volunteers/organizer/meal_tickets.html", {
         "event": event, "days": form.fields["day"].queryset, "selected_day": selected_day,
         "tickets": tickets, "member_filter": member_filter,
         "members": form.fields["member"].queryset, "form": form,
         "sheets": sheets,
+        "ticket_logo_url": reverse("association_logo_image"),
+        "print_url": f"{reverse('meal_tickets', args=[event.pk])}?{urlencode(print_filters)}",
         "print_view": request.GET.get("print") == "1",
     })

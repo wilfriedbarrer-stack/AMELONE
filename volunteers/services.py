@@ -38,6 +38,7 @@ from .models import (
     Station,
     StationSlot,
 )
+from .official_pricing import registration_has_official_meal_exemption
 
 
 class BusinessRuleError(ValidationError):
@@ -122,9 +123,13 @@ def _lock_assignment_registrations(registration_ids):
     list(EventDay.objects.select_for_update(of=("self",)).filter(
         pk__in={item[1] for item in coordinates}
     ).order_by("pk"))
-    return {item.pk: item for item in Registration.objects.select_for_update(of=("self",))
-            .filter(pk__in=registration_ids)
-            .select_related("member__family", "event_day__event").order_by("pk")}
+    registrations = {item.pk: item for item in Registration.objects.select_for_update(of=("self",))
+                     .filter(pk__in=registration_ids)
+                     .select_related("member__family", "event_day__event").order_by("pk")}
+    list(MealOrder.objects.select_for_update(of=("self",)).filter(
+        registration_id__in=registration_ids
+    ).order_by("pk"))
+    return registrations
 
 
 def _cancel_incompatible_assignments(
@@ -259,8 +264,11 @@ def save_registration(
                     setattr(existing_order, f"{field}_standard_surcharge_cents", 0)
                     setattr(existing_order, f"{field}_surcharge_cents", 0)
             is_official = (
-                locked_member.is_competition_official
-                if registration.event_day.date >= timezone.localdate()
+                registration_has_official_meal_exemption(registration, member=locked_member)
+                if (
+                    registration.event_day.date >= timezone.localdate()
+                    and registration.event_day.event.status != Event.Status.ARCHIVED
+                )
                 else existing_order.official_exemption_applied
             )
             existing_order.apply_official_pricing(is_official)

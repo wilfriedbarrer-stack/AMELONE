@@ -238,12 +238,9 @@ class Member(UUIDTimeStampedModel):
                 self.clean()
         super().save(*args, **kwargs)
         if official_changed and meal_orders:
-            for order in meal_orders:
-                order.apply_official_pricing(self.is_competition_official)
-                order.updated_at = timezone.now()
-            MealOrder.objects.bulk_update(meal_orders, (
-                *MealOrder.pricing_update_fields(), "updated_at",
-            ))
+            from .official_pricing import reconcile_official_meal_orders
+
+            reconcile_official_meal_orders(meal_orders, member=self)
 
     @property
     def is_archived(self):
@@ -437,6 +434,7 @@ class Station(UUIDTimeStampedModel):
 
     @transaction.atomic
     def save(self, *args, **kwargs):
+        meal_orders = []
         if self.event_id:
             # La clé étrangère d'un nouveau poste prend aussi un verrou sur
             # l'événement. Le prendre d'abord évite l'ordre inverse Day/Event
@@ -451,11 +449,27 @@ class Station(UUIDTimeStampedModel):
             list(EventDay.objects.select_for_update(of=("self",)).filter(
                 event_id=self.event_id
             ).order_by("pk"))
+            if previous["category"] != self.category:
+                registration_ids = set(Registration.objects.filter(
+                    Q(preferred_station_id=self.pk) | Q(assignments__station_slot__station_id=self.pk),
+                    status=Registration.Status.ACTIVE,
+                    event_day__date__gte=timezone.localdate(),
+                ).values_list("pk", flat=True))
+                list(Registration.objects.select_for_update(of=("self",)).filter(
+                    pk__in=registration_ids
+                ).order_by("pk"))
+                meal_orders = list(MealOrder.objects.select_for_update(of=("self",)).filter(
+                    registration_id__in=registration_ids
+                ).select_related("registration__member", "registration__event_day").order_by("pk"))
             list(StationSlot.objects.select_for_update(of=("self",)).filter(
                 station_id=self.pk
             ).order_by("pk"))
             self.clean()
         super().save(*args, **kwargs)
+        if meal_orders:
+            from .official_pricing import reconcile_official_meal_orders
+
+            reconcile_official_meal_orders(meal_orders)
 
     def __str__(self):
         return f"{self.name} ({self.event.name})"
@@ -628,6 +642,34 @@ class Registration(UUIDTimeStampedModel):
             except ValidationError as error:
                 raise ValidationError({"preferred_station": error.messages}) from error
 
+    @transaction.atomic
+    def save(self, *args, **kwargs):
+        # Direct admin edits must use the same pricing rule as public services.
+        previous = Registration.objects.filter(pk=self.pk).values("member_id", "event_day_id").first()
+        member_ids = {self.member_id}
+        day_ids = {self.event_day_id}
+        if previous:
+            member_ids.add(previous["member_id"])
+            day_ids.add(previous["event_day_id"])
+        list(Member.objects.select_for_update(of=("self",)).filter(
+            pk__in=member_ids
+        ).order_by("pk"))
+        list(EventDay.objects.select_for_update(of=("self",)).filter(
+            pk__in=day_ids
+        ).order_by("pk"))
+        Registration.objects.select_for_update(of=("self",)).filter(pk=self.pk).first()
+        orders = list(MealOrder.objects.select_for_update(of=("self",)).filter(
+            registration_id=self.pk
+        ).order_by("pk"))
+        super().save(*args, **kwargs)
+        if orders:
+            from .official_pricing import reconcile_official_meal_orders
+
+            current = Registration.objects.select_related("member", "event_day").get(pk=self.pk)
+            for order in orders:
+                order.registration = current
+            reconcile_official_meal_orders(orders)
+
     def covers_period(self, period: str) -> bool:
         return self.availability == self.Availability.FULL_DAY or self.availability == period
 
@@ -782,6 +824,9 @@ class Assignment(UUIDTimeStampedModel):
         registrations = {item.pk: item for item in Registration.objects.select_for_update(
             of=("self",)
         ).filter(pk__in=registration_ids).select_related("member", "event_day").order_by("pk")}
+        meal_orders = list(MealOrder.objects.select_for_update(of=("self",)).filter(
+            registration_id__in=registration_ids
+        ).select_related("registration__member", "registration__event_day__event").order_by("pk"))
         slots = {item.pk: item for item in StationSlot.objects.select_for_update(
             of=("self",)
         ).filter(pk__in=slot_ids).select_related("station", "event_day").order_by("pk")}
@@ -797,6 +842,9 @@ class Assignment(UUIDTimeStampedModel):
         from .eligibility import ensure_confirmed_adult_coverage
 
         self.coverage_invalidated_assignment_ids = ensure_confirmed_adult_coverage(slot_ids)
+        from .official_pricing import reconcile_official_meal_orders
+
+        reconcile_official_meal_orders(meal_orders)
 
     def communication_payload(self):
         slot = self.station_slot
@@ -1149,9 +1197,12 @@ class MealOrder(UUIDTimeStampedModel):
         is_current = (
             self.registration.status == Registration.Status.ACTIVE
             and self.registration.event_day.date >= timezone.localdate()
+            and self.registration.event_day.event.status != Event.Status.ARCHIVED
         )
+        from .official_pricing import registration_has_official_meal_exemption
+
         is_official = (
-            self.registration.member.is_competition_official
+            registration_has_official_meal_exemption(self.registration)
             if previous is None or is_current else previous.official_exemption_applied
         )
         self.apply_official_pricing(is_official)

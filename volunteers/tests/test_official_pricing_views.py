@@ -49,7 +49,11 @@ class OfficialPricingInterfaceTests(DataMixin, TestCase):
         self.assertEqual({item["surcharge"] for item in form.menu_options}, {0})
         self.assertIn("0,00 € (officiel)", form.fields["menu"].label_from_instance(self.menu))
         self.assertIn("0,00 € (officiel)", form.fields["beverage"].label_from_instance(self.drink))
-        self.assertTrue(form.fields["payment_method"].widget.is_hidden)
+        # Le choix reste présent pour s'afficher immédiatement si l'officiel
+        # sélectionne ensuite un poste bénévole dans le navigateur.
+        self.assertFalse(form.fields["payment_method"].widget.is_hidden)
+        self.assertTrue(form.fields["payment_method"].disabled)
+        self.assertTrue(form.official_pricing_data["eligible"])
 
     def test_official_hidden_payment_preserves_valid_cleaned_key_and_ignores_forgery(self):
         self.make_official()

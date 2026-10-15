@@ -4,8 +4,8 @@ from django import forms
 from django.db.models import Count, Q
 
 from .forms_eligibility import eligible_slots, station_requirements_label
-from .forms_family import FamilyRegistrationForm, MemberForm
-from .models import Assignment, Member, StationSlot
+from .forms_family import FamilyRegistrationForm, MemberForm, configure_official_meal_pricing
+from .models import Assignment, MealOrder, Member, StationSlot
 
 
 class PersonalProfileForm(forms.Form):
@@ -86,6 +86,8 @@ class PersonalRegistrationForm(FamilyRegistrationForm):
             )
             if registration:
                 self.initial["station_slots"] = current_slot_ids
+            order = MealOrder.objects.filter(registration=registration).first() if registration else None
+            configure_official_meal_pricing(self, member, order, reactivating=True)
 
     def clean(self):
         cleaned = super().clean()

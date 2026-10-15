@@ -202,15 +202,19 @@ confirmer à nouveau.
 
 ## Repas et boissons sans supplément pour les officiels
 
-Un participant habilité **Officiel de compétition** ne paie aucun supplément pour
-son repas ou sa collation et sa boisson. Cette gratuité suit son habilitation
-individuelle ; les autres membres de sa famille gardent leurs tarifs habituels.
+Un participant habilité **Officiel de compétition** bénéficie de la restauration
+sans supplément lorsqu’il n’est pas inscrit à un poste bénévole ce jour-là.
+Toute affectation bénévole active, même en brouillon ou cumulée avec un poste
+officiel, applique le tarif bénévole à la journée. Sans affectation active, le
+poste souhaité détermine cette règle. Les autres membres de la famille gardent
+leurs tarifs habituels.
 Les formulaires, récapitulatifs et soldes affichent les montants réellement dus.
 
 Attribuer ou retirer la fonction recalcule les réservations actives d’aujourd’hui
 et à venir. Les tarifs initialement réservés sont conservés pour être réappliqués
 en cas de retrait, même si le catalogue a changé entre-temps. Les réservations
-passées et les paiements enregistrés sont conservés. Un éventuel trop-perçu reste
+passées, annulées ou archivées et les paiements enregistrés sont conservés.
+Un éventuel trop-perçu reste
 visible dans le solde de la famille.
 
 ## Modifier les profils depuis l’administration
