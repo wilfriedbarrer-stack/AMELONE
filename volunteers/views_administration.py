@@ -6,7 +6,7 @@ from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from PIL import Image, UnidentifiedImageError
 
@@ -87,7 +87,8 @@ def administration_dashboard(request):
 
 @administrator_required
 def profile_list(request):
-    return render(request, "administration/profiles.html", {"profiles": User.objects.all()})
+    profiles = User.objects.select_related("family", "participant_profile")
+    return render(request, "administration/profiles.html", {"profiles": profiles})
 
 
 @administrator_required
@@ -133,6 +134,11 @@ def profile_update(request, user_id):
                             # A role change must remove previously delegated Django permissions.
                             profile.groups.clear()
                             profile.user_permissions.clear()
+                    except IntegrityError:
+                        if User.objects.filter(email__iexact=form.cleaned_data["email"]).exclude(pk=profile.pk).exists():
+                            form.add_error("email", "Cette adresse e-mail est déjà utilisée.")
+                        else:
+                            raise
                     except ValidationError as error:
                         for message in error.messages:
                             form.add_error(None, message)

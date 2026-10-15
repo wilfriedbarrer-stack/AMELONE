@@ -8,7 +8,10 @@
             <h1>{{ family.display_name }}</h1>
             <p>Compte responsable : {{ family.account.get_full_name|default:family.account.email }} · {{ family.account.email }}</p>
         </div>
-        <a class="button button-secondary" href="{% url 'profile_update' family.account.pk %}">Profil du compte responsable</a>
+        <div class="button-row">
+            <a class="button button-primary" href="{% url 'administrator_family_update' family.pk %}">Modifier les informations de la famille</a>
+            <a class="button button-secondary" href="{% url 'profile_update' family.account.pk %}">Profil et droits du compte responsable</a>
+        </div>
     </div>
 </header>
 <div class="shell page-stack">
@@ -24,6 +27,8 @@
             <div class="button-row">
                 {% if member.is_archived %}<span class="badge badge-neutral">Archivé</span>{% else %}<span class="badge badge-success">Actif</span>{% endif %}
                 {% if member.is_competition_official %}<span class="badge badge-success">Officiel de compétition</span>{% endif %}
+                <a class="button button-secondary button-small" href="{% url 'administrator_member_update' family.pk member.pk %}">Modifier le profil</a>
+                {% if member.user_id %}<a class="button button-quiet button-small" href="{% url 'profile_update' member.user_id %}">Modifier les droits du compte</a>{% endif %}
             </div>
         </div>
         <form method="post" class="stack-form">

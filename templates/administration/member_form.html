@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Modifier {{ member.full_name }} — AMELONE{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div class="shell header-copy">
+        <div><span class="eyebrow">Administration · Profil d’un membre</span><h1>Modifier le profil</h1><p>{{ member.full_name }} · Famille {{ family.display_name }}</p>{% if member.is_archived %}<span class="badge badge-neutral">Membre archivé</span>{% endif %}</div>
+        {% if member.user_id %}<a class="button button-secondary" href="{% url 'profile_update' member.user_id %}">Modifier les droits du compte lié</a>{% endif %}
+    </div>
+</header>
+<div class="shell narrow-content page-stack">
+    <div class="info-banner"><span aria-hidden="true">i</span><div><strong>Informations privées</strong><p>La date de naissance et la fonction d’officiel restent soumises aux règles des affectations existantes. Réorganisez les postes concernés si une modification est refusée. Licence et formation à jour nécessaires pour les postes d’officiel.</p></div></div>
+    <section class="panel"><form method="post" class="stack-form" novalidate>{% csrf_token %}{% include "partials/form_fields.html" %}<div class="form-actions"><a class="button button-quiet" href="{% url 'administrator_family_detail' family.pk %}">Annuler</a><button class="button button-primary" type="submit">Enregistrer le profil</button></div></form></section>
+    <a href="{% url 'administrator_family_detail' family.pk %}">Retour aux membres de la famille</a>
+</div>
+{% endblock %}

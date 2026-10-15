@@ -15,6 +15,8 @@ from . import (
 urlpatterns = [
     path("administration/familles/", views_family_administration.administrator_families, name="administrator_families"),
     path("administration/familles/<uuid:family_id>/", views_family_administration.administrator_family_detail, name="administrator_family_detail"),
+    path("administration/familles/<uuid:family_id>/modifier/", views_family_administration.administrator_family_update, name="administrator_family_update"),
+    path("administration/familles/<uuid:family_id>/membres/<uuid:member_id>/modifier/", views_family_administration.administrator_member_update, name="administrator_member_update"),
     path("participation/", views_self.personal_participation, name="personal_participation"),
     path("participation/profil/", views_self.personal_profile, name="personal_profile"),
     path("participation/journees/<uuid:event_day_id>/", views_self.personal_registration, name="personal_registration"),

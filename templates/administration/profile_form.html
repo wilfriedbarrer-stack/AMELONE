@@ -1,3 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Modifier un profil — AMELONE{% endblock %}
-{% block content %}<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Administration</span><h1>Modifier le profil</h1><p>{{ profile.email }}</p></div></div></header><div class="shell narrow-content page-stack"><section class="panel"><form method="post" class="stack-form">{% csrf_token %}{% include "partials/form_fields.html" %}<div class="form-actions"><a class="button button-quiet" href="{% url 'profile_list' %}">Annuler</a><button class="button button-primary" type="submit">Enregistrer</button></div></form></section></div>{% endblock %}
+{% block content %}
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Administration</span><h1>Modifier le profil</h1><p>{{ profile.email }}</p></div><div class="button-row">{% if profile.family %}<a class="button button-secondary" href="{% url 'administrator_family_detail' profile.family.pk %}">Voir les membres de la famille</a><a class="button button-quiet" href="{% url 'administrator_family_update' profile.family.pk %}">Modifier les informations de la famille</a>{% endif %}{% if profile.participant_profile %}<a class="button button-secondary" href="{% url 'administrator_member_update' profile.participant_profile.family_id profile.participant_profile.pk %}">Modifier le profil participant</a>{% endif %}</div></div></header>
+<div class="shell narrow-content page-stack">
+    <div class="info-banner"><span aria-hidden="true">i</span><p>Les coordonnées du compte sont privées. L’identité et la date de naissance de chaque membre se modifient depuis son profil participant.</p></div>
+    <section class="panel"><form method="post" class="stack-form">{% csrf_token %}{% include "partials/form_fields.html" %}<div class="form-actions"><a class="button button-quiet" href="{% url 'profile_list' %}">Annuler</a><button class="button button-primary" type="submit">Enregistrer</button></div></form></section>
+</div>
+{% endblock %}
