@@ -125,14 +125,25 @@ modèle. Un événement sans historique est supprimé avec sa configuration. S�
 contient déjà des inscriptions, présences, envois ou paiements, l’action le retire
 de la liste active en conservant son historique dans **Événements archivés**.
 
+Dans **Administration → Menus et boissons**, gérez le catalogue commun : ses
+choix actifs sont automatiquement proposés sur tous les événements. Les anciens
+choix locaux peuvent devenir communs avec **Rendre commun**, sans modifier les
+réservations existantes. Les imports CSV/Excel disposent d’un aperçu à confirmer.
+
 Les présences et la restauration se remplissent ensemble : repas complet à la
-journée, collation à la demi-journée, boisson et préférence de paiement au comptoir
-ou via SumUp. Le lien commun se configure dans le règlement de l’association.
+journée, avec collations facultatives du matin et de l’après-midi, collation à la
+demi-journée, boisson et préférence de paiement au comptoir ou via SumUp.
+Les officiels ne paient aucun supplément, collations comprises. Les tarifs déjà
+réservés restent conservés. Le lien commun se configure dans le règlement de l’association.
 Les postes acceptent désormais la période Journée.
 
 L’import CSV/Excel affiche un aperçu à valider. Les récapitulatifs des postes et
 de la restauration sont distincts, imprimables et exportables en CSV. Voir le
 [guide et les colonnes des fichiers](docs/profils-repas-imports.md).
+
+Depuis un événement, **Tickets repas** prépare un ticket nominatif par personne
+et par jour, avec tous ses choix. L’impression ou l’enregistrement en PDF utilise
+six tickets par feuille A4 ; ces pages restent réservées à l’organisation.
 
 ## Participation personnelle des administrateurs et officiels
 

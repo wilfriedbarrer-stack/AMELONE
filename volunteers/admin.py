@@ -502,6 +502,8 @@ class MealOrderAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
         "event_day",
         "wants_meal",
         "menu",
+        "morning_snack",
+        "afternoon_snack",
         "beverage",
         "official_exemption_applied",
         "total_surcharge_cents",
@@ -513,11 +515,13 @@ class MealOrderAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
         "menu__name",
         "beverage__name",
     )
-    autocomplete_fields = ("registration", "menu", "beverage", "corrected_by")
+    autocomplete_fields = ("registration", "menu", "morning_snack", "afternoon_snack", "beverage", "corrected_by")
     readonly_fields = ReadOnlyTimestampsMixin.readonly_fields + (
         "official_exemption_applied",
         "menu_surcharge_cents",
         "beverage_surcharge_cents",
+        "morning_snack_surcharge_cents",
+        "afternoon_snack_surcharge_cents",
         "total_surcharge_cents",
     )
 

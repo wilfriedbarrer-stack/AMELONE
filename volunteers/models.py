@@ -242,9 +242,7 @@ class Member(UUIDTimeStampedModel):
                 order.apply_official_pricing(self.is_competition_official)
                 order.updated_at = timezone.now()
             MealOrder.objects.bulk_update(meal_orders, (
-                "menu_standard_surcharge_cents", "beverage_standard_surcharge_cents",
-                "official_exemption_applied", "menu_surcharge_cents",
-                "beverage_surcharge_cents", "total_surcharge_cents", "updated_at",
+                *MealOrder.pricing_update_fields(), "updated_at",
             ))
 
     @property
@@ -832,7 +830,7 @@ class Assignment(UUIDTimeStampedModel):
 
 
 class PricedOption(UUIDTimeStampedModel):
-    event_day = models.ForeignKey(EventDay, on_delete=models.CASCADE)
+    event_day = models.ForeignKey(EventDay, on_delete=models.CASCADE, null=True, blank=True, default=None, db_default=None)
     name = models.CharField(_("nom"), max_length=160)
     description = models.TextField(_("description"), blank=True)
     surcharge_cents = models.PositiveIntegerField(_("supplément (centimes)"), default=0)
@@ -843,19 +841,21 @@ class PricedOption(UUIDTimeStampedModel):
         ordering = ("name",)
 
     def __str__(self):
-        return f"{self.name} — {self.event_day.date:%d/%m/%Y}"
+        scope = f"{self.event_day.date:%d/%m/%Y}" if self.event_day_id else _("Catalogue commun")
+        return f"{self.name} — {scope}"
 
 
 class Menu(PricedOption):
     class MealType(models.TextChoices):
         FULL_MEAL = "full_meal", _("Repas complet — journée")
-        SNACK = "snack", _("Collation — demi-journée")
+        SNACK = "snack", _("Collation")
 
     meal_type = models.CharField(
         _("type de repas"), max_length=16, choices=MealType.choices, default=MealType.FULL_MEAL, db_default=MealType.FULL_MEAL
     )
     event_day = models.ForeignKey(
-        EventDay, on_delete=models.CASCADE, related_name="menus", verbose_name=_("journée")
+        EventDay, on_delete=models.CASCADE, related_name="menus", verbose_name=_("journée"),
+        null=True, blank=True, default=None, db_default=None,
     )
 
     def clean(self):
@@ -868,31 +868,54 @@ class Menu(PricedOption):
                 if self.meal_type == self.MealType.FULL_MEAL
                 else orders.filter(registration__availability=Registration.Availability.FULL_DAY)
             )
-            if incompatible.exists():
+            snack_reserved = (
+                self.meal_type != self.MealType.SNACK
+                and (
+                    self.morning_snack_orders.filter(
+                        wants_meal=True, registration__status=Registration.Status.ACTIVE,
+                    ).exists()
+                    or self.afternoon_snack_orders.filter(
+                        wants_meal=True, registration__status=Registration.Status.ACTIVE,
+                    ).exists()
+                )
+            )
+            if incompatible.exists() or snack_reserved:
                 raise ValidationError({"meal_type": _("Ce changement rendrait des réservations incompatibles. Créez un autre menu ou corrigez d’abord les réservations.")})
 
     class Meta(PricedOption.Meta):
         verbose_name = _("menu")
         verbose_name_plural = _("menus")
         constraints = [
-            models.UniqueConstraint(fields=("event_day", "name"), name="unique_menu_name_day")
+            models.UniqueConstraint(fields=("event_day", "name"), name="unique_menu_name_day"),
+            models.UniqueConstraint(
+                fields=("name", "meal_type"), condition=Q(event_day__isnull=True),
+                name="unique_global_menu_name_type",
+            ),
         ]
 
 
 class Beverage(PricedOption):
     event_day = models.ForeignKey(
-        EventDay, on_delete=models.CASCADE, related_name="beverages", verbose_name=_("journée")
+        EventDay, on_delete=models.CASCADE, related_name="beverages", verbose_name=_("journée"),
+        null=True, blank=True, default=None, db_default=None,
     )
 
     class Meta(PricedOption.Meta):
         verbose_name = _("boisson")
         verbose_name_plural = _("boissons")
         constraints = [
-            models.UniqueConstraint(fields=("event_day", "name"), name="unique_beverage_name_day")
+            models.UniqueConstraint(fields=("event_day", "name"), name="unique_beverage_name_day"),
+            models.UniqueConstraint(
+                fields=("name",), condition=Q(event_day__isnull=True),
+                name="unique_global_beverage_name",
+            ),
         ]
 
 
 class MealOrder(UUIDTimeStampedModel):
+    PRICE_COMPONENTS = ("menu", "beverage", "morning_snack", "afternoon_snack")
+    MENU_COMPONENTS = ("menu", "morning_snack", "afternoon_snack")
+
     class PaymentMethod(models.TextChoices):
         COUNTER = "counter", _("Paiement au comptoir")
         SUMUP = "sumup", _("Paiement via lien SumUp")
@@ -925,11 +948,25 @@ class MealOrder(UUIDTimeStampedModel):
         null=True,
         blank=True,
     )
+    morning_snack = models.ForeignKey(
+        Menu, verbose_name=_("collation du matin"), on_delete=models.PROTECT,
+        related_name="morning_snack_orders", null=True, blank=True, default=None, db_default=None,
+    )
+    afternoon_snack = models.ForeignKey(
+        Menu, verbose_name=_("collation de l'après-midi"), on_delete=models.PROTECT,
+        related_name="afternoon_snack_orders", null=True, blank=True, default=None, db_default=None,
+    )
     menu_surcharge_cents = models.PositiveIntegerField(
         _("supplément menu appliqué"), default=0, editable=False
     )
     beverage_surcharge_cents = models.PositiveIntegerField(
         _("supplément boisson appliqué"), default=0, editable=False
+    )
+    morning_snack_surcharge_cents = models.PositiveIntegerField(
+        _("supplément collation du matin appliqué"), default=0, db_default=0, editable=False,
+    )
+    afternoon_snack_surcharge_cents = models.PositiveIntegerField(
+        _("supplément collation de l'après-midi appliqué"), default=0, db_default=0, editable=False,
     )
     total_surcharge_cents = models.PositiveIntegerField(
         _("supplément total"), default=0, editable=False
@@ -940,6 +977,14 @@ class MealOrder(UUIDTimeStampedModel):
     )
     beverage_standard_surcharge_cents = models.PositiveIntegerField(
         _("supplément boisson avant exonération"), null=True, default=None,
+        db_default=None, editable=False,
+    )
+    morning_snack_standard_surcharge_cents = models.PositiveIntegerField(
+        _("supplément collation du matin avant exonération"), null=True, default=None,
+        db_default=None, editable=False,
+    )
+    afternoon_snack_standard_surcharge_cents = models.PositiveIntegerField(
+        _("supplément collation de l'après-midi avant exonération"), null=True, default=None,
         db_default=None, editable=False,
     )
     official_exemption_applied = models.BooleanField(
@@ -962,7 +1007,8 @@ class MealOrder(UUIDTimeStampedModel):
             models.CheckConstraint(
                 condition=(
                     Q(wants_meal=True, menu__isnull=False)
-                    | Q(wants_meal=False, menu__isnull=True, beverage__isnull=True)
+                    | Q(wants_meal=False, menu__isnull=True, beverage__isnull=True,
+                        morning_snack__isnull=True, afternoon_snack__isnull=True)
                 ),
                 name="meal_order_coherent_choice",
             ),
@@ -970,6 +1016,8 @@ class MealOrder(UUIDTimeStampedModel):
                 condition=Q(
                     total_surcharge_cents=F("menu_surcharge_cents")
                     + F("beverage_surcharge_cents")
+                    + F("morning_snack_surcharge_cents")
+                    + F("afternoon_snack_surcharge_cents")
                 ),
                 name="meal_order_total_matches_parts",
             ),
@@ -984,14 +1032,28 @@ class MealOrder(UUIDTimeStampedModel):
         errors = {}
         if self.wants_meal and not self.menu_id:
             errors["menu"] = _("Choisissez un menu ou indiquez « pas de repas ».")
-        if not self.wants_meal and (self.menu_id or self.beverage_id):
-            errors["wants_meal"] = _("Un repas non demandé ne peut contenir ni menu ni boisson.")
+        if not self.wants_meal and any(getattr(self, f"{field}_id") for field in self.PRICE_COMPONENTS):
+            errors["wants_meal"] = _("Un repas non demandé ne peut contenir ni menu, ni collation, ni boisson.")
         if self.registration_id:
             event_day_id = self.registration.event_day_id
-            if self.menu_id and self.menu.event_day_id != event_day_id:
-                errors["menu"] = _("Le menu doit appartenir à la journée d'inscription.")
-            if self.beverage_id and self.beverage.event_day_id != event_day_id:
-                errors["beverage"] = _("La boisson doit appartenir à la journée d'inscription.")
+            previous = MealOrder.objects.filter(pk=self.pk).first()
+            for field in self.PRICE_COMPONENTS:
+                option = getattr(self, field)
+                if option is None:
+                    continue
+                if option.event_day_id not in (None, event_day_id):
+                    errors[field] = _("Ce choix doit être commun ou appartenir à la journée d'inscription.")
+                preserved = previous is not None and getattr(previous, f"{field}_id") == option.pk
+                if not option.is_active and not preserved:
+                    errors[field] = _("Ce choix n'est plus proposé.")
+            for field in ("morning_snack", "afternoon_snack"):
+                snack = getattr(self, field)
+                if snack is None:
+                    continue
+                if self.registration.availability != Registration.Availability.FULL_DAY:
+                    errors[field] = _("Les collations supplémentaires sont réservées à une présence à la journée.")
+                elif snack.meal_type != Menu.MealType.SNACK:
+                    errors[field] = _("Choisissez une collation pour cette période.")
             if self.menu_id:
                 expected = (
                     Menu.MealType.FULL_MEAL
@@ -999,7 +1061,6 @@ class MealOrder(UUIDTimeStampedModel):
                     else Menu.MealType.SNACK
                 )
                 if self.menu.meal_type != expected:
-                    previous = MealOrder.objects.filter(pk=self.pk).only("menu_id", "legacy_availability").first()
                     preserved = (
                         previous is not None and previous.menu_id == self.menu_id
                         and previous.legacy_availability in (self.registration.availability, "legacy")
@@ -1010,20 +1071,24 @@ class MealOrder(UUIDTimeStampedModel):
         if errors:
             raise ValidationError(errors)
 
+    @classmethod
+    def pricing_update_fields(cls):
+        return tuple(
+            field
+            for component in cls.PRICE_COMPONENTS
+            for field in (f"{component}_standard_surcharge_cents", f"{component}_surcharge_cents")
+        ) + ("official_exemption_applied", "total_surcharge_cents")
+
     def apply_official_pricing(self, is_official):
         """Applique l'exonération sans perdre les tarifs réservés ni toucher les paiements."""
-        if self.menu_standard_surcharge_cents is None:
-            self.menu_standard_surcharge_cents = self.menu_surcharge_cents
-        if self.beverage_standard_surcharge_cents is None:
-            self.beverage_standard_surcharge_cents = self.beverage_surcharge_cents
+        for component in self.PRICE_COMPONENTS:
+            standard_field = f"{component}_standard_surcharge_cents"
+            applied_field = f"{component}_surcharge_cents"
+            if getattr(self, standard_field) is None:
+                setattr(self, standard_field, getattr(self, applied_field))
+            setattr(self, applied_field, 0 if is_official else getattr(self, standard_field))
         self.official_exemption_applied = bool(is_official)
-        self.menu_surcharge_cents = (
-            0 if is_official else self.menu_standard_surcharge_cents
-        )
-        self.beverage_surcharge_cents = (
-            0 if is_official else self.beverage_standard_surcharge_cents
-        )
-        self.total_surcharge_cents = self.menu_surcharge_cents + self.beverage_surcharge_cents
+        self.total_surcharge_cents = sum(getattr(self, f"{component}_surcharge_cents") for component in self.PRICE_COMPONENTS)
 
     @transaction.atomic
     def save(self, *args, **kwargs):
@@ -1051,24 +1116,28 @@ class MealOrder(UUIDTimeStampedModel):
             if previous.registration_id not in registrations:
                 raise ValidationError(_("La réservation a été déplacée. Rechargez la page avant de réessayer."))
             if update_fields is not None:
-                for field in ("registration", "menu", "beverage", "wants_meal", "legacy_availability"):
+                for field in ("registration", *self.PRICE_COMPONENTS, "wants_meal", "legacy_availability"):
                     if field not in update_fields and f"{field}_id" not in update_fields:
-                        attribute = f"{field}_id" if field in ("registration", "menu", "beverage") else field
+                        attribute = f"{field}_id" if field in ("registration", *self.PRICE_COMPONENTS) else field
                         setattr(self, attribute, getattr(previous, attribute))
         self.registration = registrations[self.registration_id]
         self.registration.member = members[self.registration.member_id]
         self.registration.event_day = days[self.registration.event_day_id]
-        if self.menu_id:
-            self.menu = Menu.objects.select_for_update(of=("self",)).get(pk=self.menu_id)
+        menu_ids = {getattr(self, f"{field}_id") for field in self.MENU_COMPONENTS} - {None}
+        menus = {option.pk: option for option in Menu.objects.select_for_update(of=("self",))
+                 .filter(pk__in=menu_ids).order_by("pk")}
+        if set(menus) != menu_ids:
+            raise ValidationError(_("Un menu ou une collation n'est plus disponible. Rechargez la page."))
+        for field in self.MENU_COMPONENTS:
+            setattr(self, field, menus.get(getattr(self, f"{field}_id")))
         if self.beverage_id:
             self.beverage = Beverage.objects.select_for_update(of=("self",)).get(pk=self.beverage_id)
         if not self.wants_meal:
-            self.menu = None
-            self.beverage = None
-            self.menu_standard_surcharge_cents = 0
-            self.beverage_standard_surcharge_cents = 0
+            for component in self.PRICE_COMPONENTS:
+                setattr(self, component, None)
+                setattr(self, f"{component}_standard_surcharge_cents", 0)
         else:
-            for component in ("menu", "beverage"):
+            for component in self.PRICE_COMPONENTS:
                 if previous is None or getattr(previous, f"{component}_id") != getattr(self, f"{component}_id"):
                     option = getattr(self, component)
                     standard = option.surcharge_cents if option is not None else 0
@@ -1088,13 +1157,9 @@ class MealOrder(UUIDTimeStampedModel):
         self.apply_official_pricing(is_official)
         self.full_clean()
         if update_fields is not None:
-            kwargs["update_fields"] = set(update_fields) | {
-                "menu_standard_surcharge_cents", "beverage_standard_surcharge_cents",
-                "official_exemption_applied", "menu_surcharge_cents",
-                "beverage_surcharge_cents", "total_surcharge_cents",
-            }
+            kwargs["update_fields"] = set(update_fields) | set(self.pricing_update_fields())
             if not self.wants_meal:
-                kwargs["update_fields"].update(("menu", "beverage"))
+                kwargs["update_fields"].update(self.PRICE_COMPONENTS)
         super().save(*args, **kwargs)
 
     def __str__(self):

@@ -10,6 +10,7 @@ from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from PIL import Image, UnidentifiedImageError
 
+from .meal_catalogue import menu_options_for_day
 from .models import Event, Family, Member, SiteBranding, User
 from .views_organizer import organizer_required
 
@@ -85,6 +86,9 @@ def administration_dashboard(request):
     events = Event.objects.all()
     events = events.filter(status=Event.Status.ARCHIVED) if show_archived else events.exclude(status=Event.Status.ARCHIVED)
     events = events.prefetch_related("days__menus", "stations").order_by("name")
+    for event in events:
+        for day in event.days.all():
+            day.offered_menus = list(menu_options_for_day(day, active_only=False))
     return render(request, "administration/dashboard.html", {
         "events": events, "show_archived": show_archived,
     })

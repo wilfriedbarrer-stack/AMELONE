@@ -11,9 +11,16 @@ from . import (
     views_profiles,
     views_public,
     views_self,
+    views_shared_catalogue,
+    views_tickets,
 )
 
 urlpatterns = [
+    path("organisateur/catalogue-restauration/", views_shared_catalogue.shared_catalogue, name="shared_catalogue"),
+    path("organisateur/catalogue-restauration/<str:kind>/ajouter/", views_shared_catalogue.shared_catalogue_create, name="shared_catalogue_create"),
+    path("organisateur/catalogue-restauration/<str:kind>/importer/", views_shared_catalogue.shared_catalogue_import, name="shared_catalogue_import"),
+    path("organisateur/catalogue-restauration/<str:kind>/<uuid:option_id>/modifier/", views_shared_catalogue.shared_catalogue_update, name="shared_catalogue_update"),
+    path("organisateur/catalogue-restauration/<str:kind>/<uuid:option_id>/rendre-commun/", views_shared_catalogue.shared_catalogue_promote, name="shared_catalogue_promote"),
     path("administration/familles/", views_family_administration.administrator_families, name="administrator_families"),
     path("administration/familles/<uuid:family_id>/", views_family_administration.administrator_family_detail, name="administrator_family_detail"),
     path("administration/familles/<uuid:family_id>/modifier/", views_family_administration.administrator_family_update, name="administrator_family_update"),
@@ -38,6 +45,7 @@ urlpatterns = [
     path("organisateur/evenements/<uuid:event_id>/recapitulatif-postes.csv", views_catalogue.recap_assignments_csv, name="recap_assignments_csv"),
     path("organisateur/evenements/<uuid:event_id>/recapitulatif-repas/", views_catalogue.recap_meals, name="recap_meals"),
     path("organisateur/evenements/<uuid:event_id>/recapitulatif-repas.csv", views_catalogue.recap_meals_csv, name="recap_meals_csv"),
+    path("organisateur/evenements/<uuid:event_id>/tickets-repas/", views_tickets.meal_tickets, name="meal_tickets"),
     path("organisateur/menus/<uuid:menu_id>/modifier/", views_organizer.menu_update, name="menu_update"),
     path("organisateur/boissons/<uuid:beverage_id>/modifier/", views_organizer.beverage_update, name="beverage_update"),
     path("administration/", views_administration.administration_dashboard, name="administration_dashboard"),

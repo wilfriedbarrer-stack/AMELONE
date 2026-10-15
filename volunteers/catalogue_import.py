@@ -149,7 +149,7 @@ def _parse_amount(value):
         raise ValidationError("Le supplément est invalide.") from error
 
 
-def parse_catalogue_upload(upload, kind):
+def parse_catalogue_upload(upload, kind, *, identity_by_type=False):
     if kind not in CATALOGUE_KINDS:
         raise ValidationError("Choisissez un import de menus ou de boissons.")
     preview = CataloguePreview()
@@ -203,9 +203,6 @@ def parse_catalogue_upload(upload, kind):
                 row["errors"].append("Le nom est obligatoire et limité à 160 caractères.")
             if len(row["description"]) > MAX_DESCRIPTION_LENGTH:
                 row["errors"].append("La description est limitée à 4 000 caractères.")
-            if row["name"].casefold() in seen:
-                row["errors"].append("Ce nom apparaît plusieurs fois dans le fichier.")
-            seen.add(row["name"].casefold())
             try:
                 row["surcharge_cents"] = _parse_amount(data.get("supplement_euros"))
             except ValidationError as error:
@@ -216,6 +213,17 @@ def parse_catalogue_upload(upload, kind):
                     row["errors"].append("Le type doit être « repas » ou « collation ».")
                 else:
                     row["meal_type"] = MEAL_TYPES[meal_type]
+            identity = (
+                (row["name"].casefold(), row["meal_type"])
+                if identity_by_type and kind == "menus" else row["name"].casefold()
+            )
+            if identity in seen:
+                row["errors"].append(
+                    "Ce nom et ce type apparaissent plusieurs fois dans le fichier."
+                    if identity_by_type and kind == "menus"
+                    else "Ce nom apparaît plusieurs fois dans le fichier."
+                )
+            seen.add(identity)
             preview.rows.append(row)
     except StopIteration:
         preview.errors.append("Le fichier est vide.")
@@ -266,11 +274,21 @@ def _validate_option(option):
 def _options_by_name(day, kind, lock=False):
     query = CATALOGUE_KINDS[kind].objects.filter(event_day=day)
     if lock:
-        query = query.select_for_update()
+        query = query.select_for_update(of=("self",)).order_by("pk")
     index = {}
     for option in query:
-        index.setdefault(option.name.casefold(), []).append(option)
+        identity = (
+            (option.name.casefold(), option.meal_type)
+            if day is None and kind == "menus" else option.name.casefold()
+        )
+        index.setdefault(identity, []).append(option)
     return index
+
+
+def _row_identity(row, day, kind):
+    if day is None and kind == "menus":
+        return row["name"].casefold(), row["meal_type"]
+    return row["name"].casefold()
 
 
 def _option_from_row(row, day, kind, existing=None):
@@ -286,7 +304,7 @@ def _option_from_row(row, day, kind, existing=None):
 def prepare_catalogue_preview(preview, day, kind):
     index = _options_by_name(day, kind)
     for row in preview.rows:
-        matching = index.get(row["name"].casefold(), [])
+        matching = index.get(_row_identity(row, day, kind), [])
         row["action"] = "update" if matching else "create"
         row["expected"] = _fingerprint(matching[0]) if len(matching) == 1 else None
         if len(matching) > 1:
@@ -298,9 +316,16 @@ def prepare_catalogue_preview(preview, day, kind):
 
 
 @transaction.atomic
-def apply_catalogue_preview(*, day, kind, rows, confirm_updates=False):
-    # Serialize catalogue imports for this day and detect edits made since preview.
-    day = EventDay.objects.select_for_update().get(pk=day.pk)
+def apply_catalogue_preview(*, day, kind, rows, confirm_updates=False, actor=None):
+    if day is None or actor is not None:
+        # Local import callers remain compatible; shared mutations always reload
+        # and lock the active organizer before touching catalogue rows.
+        from .shared_catalogue import authorize_catalogue_actor
+
+        authorize_catalogue_actor(actor)
+    # Lock the day for local imports and all existing options in either scope.
+    if day is not None:
+        day = EventDay.objects.select_for_update().get(pk=day.pk)
     index = _options_by_name(day, kind, lock=True)
     options = []
     if not rows or len(rows) > MAX_ROWS:
@@ -308,7 +333,7 @@ def apply_catalogue_preview(*, day, kind, rows, confirm_updates=False):
     for row in rows:
         if row.get("errors"):
             raise ValidationError("Corrigez toutes les erreurs avant de confirmer l'import.")
-        matching = index.get(row["name"].casefold(), [])
+        matching = index.get(_row_identity(row, day, kind), [])
         if len(matching) > 1 or _fingerprint(matching[0] if matching else None) != row["expected"]:
             raise ValidationError("Le catalogue a changé depuis l'aperçu. Recommencez l'import.")
         existing = matching[0] if matching else None
@@ -319,6 +344,9 @@ def apply_catalogue_preview(*, day, kind, rows, confirm_updates=False):
         if errors:
             raise ValidationError(errors)
         options.append(option)
+    # An empty shared catalogue offers no rows to lock. Stable insertion order
+    # also avoids crossed unique-index waits between two concurrent imports.
+    options.sort(key=lambda option: (option.name.casefold(), getattr(option, "meal_type", "")))
     for option in options:
         option.save()
     return len(options)

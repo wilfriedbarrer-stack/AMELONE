@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#12651c">
   <title>{% block title %}AMELONE LOISIRS{% endblock %}</title>
   <meta name="description" content="Gestion des bénévoles et des événements de l’association Amelone Loisirs.">
-  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=amelone-loisirs-4">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=amelone-loisirs-5">
   {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -33,6 +33,7 @@
             {% url 'annual_tracking' as annual_tracking_url %}
             <a href="{{ organizer_dashboard_url|default:'/organisateur/' }}">Tableau de bord</a>
             <a href="{{ event_list_url|default:'/organisateur/evenements/' }}">Événements</a>
+            <a href="{% url 'shared_catalogue' %}">Menus et boissons</a>
             <a href="{{ assignment_board_url|default:'/organisateur/affectations/' }}">Affectations</a>
             <a href="{{ annual_tracking_url|default:'/organisateur/suivi/' }}">Suivi annuel</a>
           {% else %}

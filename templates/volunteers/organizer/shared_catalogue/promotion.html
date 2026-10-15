@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% load volunteer_extras %}
+{% block title %}Rendre {{ option.name }} commun — Catalogue{% endblock %}
+{% block content %}
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Catalogue des menus et boissons</span><h1>Rendre ce choix commun</h1><p>Proposez ce choix sur tous les événements, présents et futurs.</p></div><a class="button button-secondary" href="{% url 'shared_catalogue' %}">Retour au catalogue</a></div></header>
+<div class="shell page-stack narrow-content">
+  <section class="panel"><span class="eyebrow">{{ event.name }} · {{ source_day.date|date:"d/m/Y" }}</span><h2>{{ option.name }}</h2>{% if option.description %}<p>{{ option.description }}</p>{% endif %}<p>{% if kind == 'menus' %}{{ option.get_meal_type_display }} · {% endif %}Supplément : {{ option.surcharge_cents|euros }}{% if not option.is_active %} · Inactif{% endif %}</p><p>Ce choix rejoint le catalogue commun. Les réservations déjà enregistrées et leurs suppléments sont conservés.</p><form method="post" class="stack-form">{% csrf_token %}{% include "partials/form_fields.html" with form=form %}<div class="form-actions"><a class="button button-quiet" href="{% url 'shared_catalogue' %}">Annuler</a><button class="button button-primary" type="submit">Rendre commun à tous les événements</button></div></form></section>
+</div>
+{% endblock %}

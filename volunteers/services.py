@@ -248,17 +248,25 @@ def save_registration(
     # Réactiver une inscription réactive le tarif de l'habilitation actuelle.
     # Pas de validation du repas ici : la présence et son nouveau menu peuvent
     # être enregistrés dans la même transaction par save_participation().
-    if registration.event_day.date >= timezone.localdate():
+    if registration.event_day.date >= timezone.localdate() or registration.availability != Registration.Availability.FULL_DAY:
         existing_order = MealOrder.objects.select_for_update(of=("self",)).filter(
             registration=registration
         ).first()
         if existing_order:
-            existing_order.apply_official_pricing(locked_member.is_competition_official)
+            if registration.availability != Registration.Availability.FULL_DAY:
+                for field in ("morning_snack", "afternoon_snack"):
+                    setattr(existing_order, field, None)
+                    setattr(existing_order, f"{field}_standard_surcharge_cents", 0)
+                    setattr(existing_order, f"{field}_surcharge_cents", 0)
+            is_official = (
+                locked_member.is_competition_official
+                if registration.event_day.date >= timezone.localdate()
+                else existing_order.official_exemption_applied
+            )
+            existing_order.apply_official_pricing(is_official)
             existing_order.updated_at = timezone.now()
             MealOrder.objects.bulk_update([existing_order], (
-                "menu_standard_surcharge_cents", "beverage_standard_surcharge_cents",
-                "official_exemption_applied", "menu_surcharge_cents",
-                "beverage_surcharge_cents", "total_surcharge_cents", "updated_at",
+                *MealOrder.pricing_update_fields(), "morning_snack", "afternoon_snack", "updated_at",
             ))
 
     invalidated = _cancel_incompatible_assignments(
@@ -516,6 +524,8 @@ def save_meal_order(
     menu: Menu | None = None,
     beverage: Beverage | None = None,
     drink: Beverage | None = None,
+    morning_snack: Menu | None = None,
+    afternoon_snack: Menu | None = None,
     no_meal: bool = False,
     payment_method: str | None = None,
     actor=None,
@@ -540,32 +550,44 @@ def save_meal_order(
         )
     order = MealOrder.objects.select_for_update(of=("self",)).filter(registration=locked_registration).first()
     try:
-        if menu is not None:
-            menu = Menu.objects.select_for_update(of=("self",)).get(pk=menu.pk)
+        selected_menus = {
+            "menu": menu, "morning_snack": morning_snack, "afternoon_snack": afternoon_snack,
+        }
+        menu_ids = {option.pk for option in selected_menus.values() if option is not None}
+        menus = {option.pk: option for option in Menu.objects.select_for_update(of=("self",))
+                 .filter(pk__in=menu_ids).order_by("pk")}
+        if set(menus) != menu_ids:
+            raise Menu.DoesNotExist
+        menu, morning_snack, afternoon_snack = (
+            menus.get(option.pk) if option is not None else None
+            for option in (menu, morning_snack, afternoon_snack)
+        )
         if beverage is not None:
             beverage = Beverage.objects.select_for_update(of=("self",)).get(pk=beverage.pk)
     except (Menu.DoesNotExist, Beverage.DoesNotExist) as error:
         raise BusinessRuleError("Cette option de restauration n’est plus disponible. Choisissez à nouveau.", code="removed_meal_option") from error
-    if no_meal and (menu is not None or beverage is not None):
+    if no_meal and any(option is not None for option in (menu, beverage, morning_snack, afternoon_snack)):
         raise BusinessRuleError(
-            "Un choix « pas de repas » ne peut contenir ni menu ni boisson.",
+            "Un choix « pas de repas » ne peut contenir ni menu, ni collation, ni boisson.",
             code="incoherent_meal",
         )
     if not no_meal and menu is None:
         raise BusinessRuleError(
             "Choisissez un menu ou indiquez « pas de repas ».", code="missing_menu"
         )
-    for option, label in ((menu, "menu"), (beverage, "boisson")):
+    for option, label, component in (
+        (menu, "menu", "menu"), (beverage, "boisson", "beverage"),
+        (morning_snack, "collation du matin", "morning_snack"),
+        (afternoon_snack, "collation de l'après-midi", "afternoon_snack"),
+    ):
         if option is None:
             continue
-        if option.event_day_id != locked_registration.event_day_id:
+        if option.event_day_id not in (None, locked_registration.event_day_id):
             raise BusinessRuleError(
                 f"Cette {label} n'appartient pas à la journée d'inscription.",
                 code="wrong_meal_day",
             )
-        preserved = order is not None and option.pk == (
-            order.menu_id if label == "menu" else order.beverage_id
-        )
+        preserved = order is not None and option.pk == getattr(order, f"{component}_id")
         if not option.is_active and not preserved:
             raise BusinessRuleError(
                 f"Cette {label} n'est plus proposée.", code="inactive_meal_option"
@@ -580,6 +602,8 @@ def save_meal_order(
     order.wants_meal = not no_meal
     order.menu = None if no_meal else menu
     order.beverage = None if no_meal else beverage
+    order.morning_snack = None if no_meal else morning_snack
+    order.afternoon_snack = None if no_meal else afternoon_snack
     if payment_method is not None:
         if payment_method not in MealOrder.PaymentMethod.values:
             raise BusinessRuleError("Le mode de paiement souhaité est invalide.", code="invalid_payment_method")
