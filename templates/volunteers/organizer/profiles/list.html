@@ -1,12 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Profils d'événement — AMELONE{% endblock %}
+{% block title %}Profils d’événements — AMELONE{% endblock %}
 {% block content %}
-<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Organisation</span><h1>Profils d'événement</h1><p>Réutilisez les postes, capacités, horaires, menus et boissons pour une nouvelle date.</p></div><a class="button button-quiet" href="{% url 'event_list' %}">Événements</a></div></header>
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Organisation</span><h1>Profils d’événements</h1><p>Préparez vos modèles et leurs postes pour les réutiliser à chaque compétition.</p></div><div class="button-row"><a class="button button-primary" href="{% url 'event_profile_new' %}">Créer un profil d’événement</a><a class="button button-quiet" href="{% url 'event_list' %}">Événements</a></div></div></header>
 <div class="shell page-stack">
-  <section class="panel"><p>Pour créer un profil, ouvrez un événement configuré et choisissez « Enregistrer comme profil ».</p><p>Les inscriptions, affectations et paiements restent propres à chaque événement.</p></section>
-  <section class="panel table-panel"><div class="responsive-table"><table>
-    <thead><tr><th>Profil</th><th>Description</th><th>Mis à jour</th><th></th></tr></thead>
-    <tbody>{% for profile in profiles %}<tr><td><strong>{{ profile.name }}</strong></td><td>{{ profile.description|default:"—" }}</td><td>{{ profile.updated_at|date:"d/m/Y" }}</td><td><a href="{% url 'event_profile_create' profile.pk %}">Créer un événement</a></td></tr>{% empty %}<tr><td colspan="4">Aucun profil enregistré.</td></tr>{% endfor %}</tbody>
-  </table></div></section>
+    <section class="info-banner"><span aria-hidden="true">i</span><p>Créez un profil, ajoutez ses postes et leurs créneaux, puis choisissez-le lors de la création d’un événement. Vous pouvez aussi enregistrer un événement déjà configuré comme profil.</p></section>
+    <section class="panel table-panel"><div class="responsive-table"><table>
+        <thead><tr><th>Profil</th><th>Description</th><th>Mis à jour</th><th>Actions</th></tr></thead>
+        <tbody>{% for profile in profiles %}<tr><td data-label="Profil"><strong>{{ profile.name }}</strong></td><td data-label="Description">{{ profile.description|default:"—" }}</td><td data-label="Mis à jour">{{ profile.updated_at|date:"d/m/Y" }}</td><td class="table-actions"><a href="{% url 'event_profile_update' profile.pk %}">Modifier le profil et ses postes</a><a href="{% url 'event_profile_create' profile.pk %}">Créer un événement</a></td></tr>{% empty %}<tr><td colspan="4">Aucun profil enregistré. Créez votre premier modèle avec le bouton ci-dessus.</td></tr>{% endfor %}</tbody>
+    </table></div></section>
+    <p class="muted">Les participants, affectations et règlements sont propres à chaque événement.</p>
 </div>
 {% endblock %}

@@ -93,6 +93,7 @@ class ReusableEventProfileTests(DataMixin, TestCase):
         self.configure_source()
         profile = save_event_profile(event=self.event, name="Profil à vérifier")
         profile.snapshot["stations"][0]["slots"][0]["day_offset"] = 400
+        profile.save(update_fields=["snapshot"])
         event_count = Event.objects.count()
         with self.assertRaises(ValidationError):
             create_event_from_profile(

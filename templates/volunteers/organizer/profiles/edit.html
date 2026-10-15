@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{% if profile %}Modifier le profil {{ profile.name }}{% else %}Créer un profil d’événement{% endif %} — AMELONE{% endblock %}
+{% block content %}
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Organisation · Profils d’événements</span><h1>{% if profile %}{{ profile.name }}{% else %}Créer un profil d’événement{% endif %}</h1><p>Préparez les informations et les postes de votre modèle, puis réutilisez-le à chaque nouvelle date.</p></div><div class="button-row">{% if profile %}<a class="button button-primary" href="{% url 'event_profile_create' profile.pk %}">Créer un événement avec ce profil</a>{% endif %}<a class="button button-quiet" href="{% url 'event_profile_list' %}">Tous les profils</a></div></div></header>
+<div class="shell page-stack">
+    {% if profile_error %}<div class="alert alert-error" role="alert">{{ profile_error }}</div>{% endif %}
+    <section class="panel narrow-content"><h2>Informations du profil</h2><form method="post" class="stack-form" novalidate>{% csrf_token %}{% include "partials/form_fields.html" with form=form %}<div class="form-actions"><a class="button button-quiet" href="{% url 'event_profile_list' %}">Annuler</a><button class="button button-primary" type="submit">{% if profile %}Enregistrer le profil{% else %}Créer le profil{% endif %}</button></div></form></section>
+    {% if profile %}
+    <section><div class="panel-heading"><div><h2>Postes du profil</h2><p>Les jours sont comptés à partir de la date choisie lors de la création de l’événement.</p></div><a class="button button-primary" href="{% url 'event_profile_station_create' profile.pk %}">Ajouter un poste au profil</a></div>
+        <div class="page-stack">
+        {% for station in stations %}
+            <article class="panel"><div class="panel-heading"><div><h3>{{ station.name }}</h3><div class="badge-row"><span class="badge badge-neutral">{% if station.config.category == 'official' %}Officiel{% else %}Bénévole{% endif %}</span>{% if not station.config.is_active %}<span class="badge badge-neutral">Inactif</span>{% endif %}</div></div><div class="button-row"><a class="button button-secondary button-small" href="{% url 'event_profile_station_update' profile.pk station.index %}">Modifier le poste et ses créneaux</a><a class="button button-quiet button-small danger-link" href="{% url 'event_profile_station_delete' profile.pk station.index %}">Supprimer le poste</a></div></div>
+                {% if station.config.description %}<p>{{ station.config.description|linebreaksbr }}</p>{% endif %}
+                {% if station.config.age_policy == 'at_least_one_adult' %}<p>Au moins un adulte (18 ans ou plus).</p>{% elif station.config.age_policy == 'adults_only' %}<p>Uniquement des adultes (18 ans ou plus).</p>{% endif %}
+                {% if station.config.category == 'official' %}<p class="help-text">Licence et formation à jour nécessaires.</p>{% endif %}
+                {% if station.config.instructions %}<p>{{ station.config.instructions|linebreaksbr }}</p>{% endif %}
+                <h4>Créneaux et capacités</h4><ul>{% for slot in station.slots %}<li>Jour {{ slot.day_offset|add:"1" }} · {% if slot.period == 'full_day' %}Journée{% elif slot.period == 'morning' %}Matin{% else %}Après-midi{% endif %} · {{ slot.start_time|default:"—"|slice:":5" }}–{{ slot.end_time|default:"—"|slice:":5" }} · {{ slot.capacity }} place{{ slot.capacity|pluralize }}</li>{% empty %}<li>Aucun créneau renseigné.</li>{% endfor %}</ul>
+            </article>
+        {% empty %}<article class="panel"><h3>Ajoutez le premier poste</h3><p>Précisez son nom, ses conditions et ses créneaux pour préparer votre modèle d’événement.</p></article>{% endfor %}
+        </div>
+    </section>
+    {% else %}<section class="info-banner"><span aria-hidden="true">i</span><p>Enregistrez les informations du profil pour ajouter ensuite ses postes et leurs créneaux.</p></section>{% endif %}
+</div>
+{% endblock %}
