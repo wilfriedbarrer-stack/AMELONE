@@ -20,7 +20,7 @@ class SharedMealAndSnackFormTests(DataMixin, TestCase):
             event_day=self.day, name="Collation locale", meal_type=Menu.MealType.SNACK,
             surcharge_cents=150,
         )
-        self.drink = Beverage.objects.create(name="Jus commun", surcharge_cents=50)
+        self.drink = Beverage.objects.create(name="Jus commun", surcharge_cents=50, temperature=Beverage.Temperature.HOT)
 
     def data(self, **extra):
         return {

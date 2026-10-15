@@ -69,6 +69,12 @@ def _ticket_row(order, event, balance):
         "afternoon_snack_name": afternoon.name if afternoon else "",
         "afternoon_snack_description": afternoon.description if afternoon else "",
         "beverage_name": order.beverage.name if order.beverage else "Sans boisson",
+        "beverage_label": {
+            Registration.Availability.MORNING: "Boisson chaude du matin",
+            Registration.Availability.AFTERNOON: "Boisson fraîche de l’après-midi",
+        }.get(registration.availability, "Boisson du repas"),
+        "morning_beverage_name": order.morning_beverage.name if order.morning_beverage else "",
+        "afternoon_beverage_name": order.afternoon_beverage.name if order.afternoon_beverage else "",
         "reference": f"REP-{order.pk.hex[:12].upper()}",
         "official_exemption": order.official_exemption_applied,
         "is_official": order.official_exemption_applied,
@@ -105,6 +111,7 @@ def meal_tickets(request, event_id):
     orders = orders.select_related(
         "registration__member__family", "registration__event_day", "menu", "beverage",
         "morning_snack", "afternoon_snack",
+        "morning_beverage", "afternoon_beverage",
     ).order_by(
         "registration__event_day__date", "registration__member__last_name",
         "registration__member__first_name", "registration__member_id", "pk",

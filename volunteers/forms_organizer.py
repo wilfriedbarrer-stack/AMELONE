@@ -23,11 +23,13 @@ from .forms_eligibility import (
     station_choice_label,
 )
 from .forms_family import (
+    MEAL_FIELD_ORDER,
     clean_snack_choices,
+    configure_beverage_fields,
     configure_official_meal_pricing,
     configure_snack_fields,
 )
-from .meal_catalogue import beverage_options_for_day, menu_options_for_day
+from .meal_catalogue import menu_options_for_day
 from .models import (
     Assignment,
     Attendance,
@@ -71,6 +73,8 @@ class EventForm(OrganizerFormMixin, forms.ModelForm):
             "registration_opens_at",
             "registration_closes_at",
             "meal_orders_close_at",
+            "morning_hot_beverage_enabled",
+            "afternoon_cold_beverage_enabled",
             "general_instructions",
             "status",
         )
@@ -384,16 +388,24 @@ class MenuForm(PricedOptionFormMixin):
 
 
 class BeverageForm(PricedOptionFormMixin):
+    temperature = forms.ChoiceField(
+        label="Température", choices=Beverage.Temperature.choices, required=False,
+        help_text="Chaude pour la collation du matin, fraîche pour celle de l’après-midi. Une boisson « À classer » reste proposée avec le repas principal uniquement.",
+    )
+
     class Meta:
         model = Beverage
-        fields = ("name", "description", "is_active")
+        fields = ("name", "description", "temperature", "is_active")
         widgets = {"description": forms.Textarea(attrs={"rows": 3})}
+
+    def clean_temperature(self):
+        return self.cleaned_data.get("temperature") or self.instance.temperature or Beverage.Temperature.UNSPECIFIED
 
 
 class MealOrderOrganizerForm(OrganizerFormMixin, forms.ModelForm):
     class Meta:
         model = MealOrder
-        fields = ("wants_meal", "menu", "morning_snack", "afternoon_snack", "beverage", "payment_method")
+        fields = ("wants_meal", *MEAL_FIELD_ORDER, "payment_method")
 
     def __init__(self, *args, registration=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -406,9 +418,14 @@ class MealOrderOrganizerForm(OrganizerFormMixin, forms.ModelForm):
         if registration and self.instance.legacy_choice_availability == registration.availability:
             allowed |= Q(pk=self.instance.menu_id)
         self.fields["menu"].queryset = menu_options_for_day(day, active_only=False).filter(allowed).order_by("name") if day else Menu.objects.none()
-        self.fields["beverage"].queryset = beverage_options_for_day(day, active_only=False).filter(Q(is_active=True) | Q(pk=self.instance.beverage_id)).order_by("name") if day else Beverage.objects.none()
         if day:
             configure_snack_fields(self, day, registration.availability, self.instance)
+            configure_beverage_fields(self, day, registration.availability, self.instance)
+        else:
+            for field in ("beverage", "morning_beverage", "afternoon_beverage"):
+                self.fields[field].queryset = Beverage.objects.none()
+        self.order_fields(("wants_meal", *MEAL_FIELD_ORDER, "payment_method"))
+        self.menu_options = []
         configure_official_meal_pricing(
             self, registration.member if registration else None,
             self.instance if self.instance.pk and not self.instance._state.adding else None,

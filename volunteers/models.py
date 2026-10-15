@@ -287,6 +287,12 @@ class Event(UUIDTimeStampedModel):
     meal_orders_close_at = models.DateTimeField(_("clôture des repas"))
     sumup_payment_url = models.URLField(_("lien de paiement SumUp"), blank=True)
     general_instructions = models.TextField(_("consignes générales"), blank=True)
+    morning_hot_beverage_enabled = models.BooleanField(
+        _("proposer une boisson chaude avec la collation du matin"), default=True, db_default=True,
+    )
+    afternoon_cold_beverage_enabled = models.BooleanField(
+        _("proposer une boisson fraîche avec la collation de l'après-midi"), default=True, db_default=True,
+    )
     status = models.CharField(
         _("statut"), max_length=16, choices=Status.choices, default=Status.DRAFT
     )
@@ -320,6 +326,24 @@ class Event(UUIDTimeStampedModel):
             self.status == self.Status.PUBLISHED
             and self.registration_opens_at <= at <= self.registration_closes_at
         )
+
+    @transaction.atomic
+    def save(self, *args, **kwargs):
+        fields = ("morning_hot_beverage_enabled", "afternoon_cold_beverage_enabled")
+        previous = Event.objects.filter(pk=self.pk).values(*fields).first()
+        update_fields = kwargs.get("update_fields")
+        if previous and update_fields is not None:
+            for field in fields:
+                if field not in update_fields:
+                    setattr(self, field, previous[field])
+        if previous and any(previous[field] != getattr(self, field) for field in fields):
+            # A meal reservation holds Day while reading these flags. Serialize
+            # offering changes with that reservation without changing its price.
+            Event.objects.select_for_update(of=("self",), no_key=True).get(pk=self.pk)
+            list(EventDay.objects.select_for_update(of=("self",)).filter(
+                event_id=self.pk
+            ).order_by("pk"))
+        super().save(*args, **kwargs)
 
     def meal_orders_are_open(self, at=None):
         at = at or timezone.now()
@@ -943,6 +967,15 @@ class Menu(PricedOption):
 
 
 class Beverage(PricedOption):
+    class Temperature(models.TextChoices):
+        HOT = "hot", _("Chaude")
+        COLD = "cold", _("Fraîche")
+        UNSPECIFIED = "unspecified", _("À classer")
+
+    temperature = models.CharField(
+        _("température"), max_length=16, choices=Temperature.choices,
+        default=Temperature.UNSPECIFIED, db_default=Temperature.UNSPECIFIED,
+    )
     event_day = models.ForeignKey(
         EventDay, on_delete=models.CASCADE, related_name="beverages", verbose_name=_("journée"),
         null=True, blank=True, default=None, db_default=None,
@@ -961,8 +994,12 @@ class Beverage(PricedOption):
 
 
 class MealOrder(UUIDTimeStampedModel):
-    PRICE_COMPONENTS = ("menu", "beverage", "morning_snack", "afternoon_snack")
+    PRICE_COMPONENTS = (
+        "menu", "beverage", "morning_snack", "afternoon_snack",
+        "morning_beverage", "afternoon_beverage",
+    )
     MENU_COMPONENTS = ("menu", "morning_snack", "afternoon_snack")
+    BEVERAGE_COMPONENTS = ("beverage", "morning_beverage", "afternoon_beverage")
 
     class PaymentMethod(models.TextChoices):
         COUNTER = "counter", _("Paiement au comptoir")
@@ -1004,6 +1041,18 @@ class MealOrder(UUIDTimeStampedModel):
         Menu, verbose_name=_("collation de l'après-midi"), on_delete=models.PROTECT,
         related_name="afternoon_snack_orders", null=True, blank=True, default=None, db_default=None,
     )
+    morning_beverage = models.ForeignKey(
+        Beverage, verbose_name=_("boisson chaude du matin"), on_delete=models.PROTECT,
+        related_name="morning_orders", null=True, blank=True, default=None, db_default=None,
+    )
+    afternoon_beverage = models.ForeignKey(
+        Beverage, verbose_name=_("boisson fraîche de l'après-midi"), on_delete=models.PROTECT,
+        related_name="afternoon_orders", null=True, blank=True, default=None, db_default=None,
+    )
+    beverage_availability = models.CharField(
+        _("période de la boisson réservée"), max_length=16, blank=True,
+        default="legacy", db_default="legacy", editable=False,
+    )
     menu_surcharge_cents = models.PositiveIntegerField(
         _("supplément menu appliqué"), default=0, editable=False
     )
@@ -1015,6 +1064,12 @@ class MealOrder(UUIDTimeStampedModel):
     )
     afternoon_snack_surcharge_cents = models.PositiveIntegerField(
         _("supplément collation de l'après-midi appliqué"), default=0, db_default=0, editable=False,
+    )
+    morning_beverage_surcharge_cents = models.PositiveIntegerField(
+        _("supplément boisson du matin appliqué"), default=0, db_default=0, editable=False,
+    )
+    afternoon_beverage_surcharge_cents = models.PositiveIntegerField(
+        _("supplément boisson de l'après-midi appliqué"), default=0, db_default=0, editable=False,
     )
     total_surcharge_cents = models.PositiveIntegerField(
         _("supplément total"), default=0, editable=False
@@ -1033,6 +1088,14 @@ class MealOrder(UUIDTimeStampedModel):
     )
     afternoon_snack_standard_surcharge_cents = models.PositiveIntegerField(
         _("supplément collation de l'après-midi avant exonération"), null=True, default=None,
+        db_default=None, editable=False,
+    )
+    morning_beverage_standard_surcharge_cents = models.PositiveIntegerField(
+        _("supplément boisson du matin avant exonération"), null=True, default=None,
+        db_default=None, editable=False,
+    )
+    afternoon_beverage_standard_surcharge_cents = models.PositiveIntegerField(
+        _("supplément boisson de l'après-midi avant exonération"), null=True, default=None,
         db_default=None, editable=False,
     )
     official_exemption_applied = models.BooleanField(
@@ -1056,7 +1119,8 @@ class MealOrder(UUIDTimeStampedModel):
                 condition=(
                     Q(wants_meal=True, menu__isnull=False)
                     | Q(wants_meal=False, menu__isnull=True, beverage__isnull=True,
-                        morning_snack__isnull=True, afternoon_snack__isnull=True)
+                        morning_snack__isnull=True, afternoon_snack__isnull=True,
+                        morning_beverage__isnull=True, afternoon_beverage__isnull=True)
                 ),
                 name="meal_order_coherent_choice",
             ),
@@ -1066,6 +1130,8 @@ class MealOrder(UUIDTimeStampedModel):
                     + F("beverage_surcharge_cents")
                     + F("morning_snack_surcharge_cents")
                     + F("afternoon_snack_surcharge_cents")
+                    + F("morning_beverage_surcharge_cents")
+                    + F("afternoon_beverage_surcharge_cents")
                 ),
                 name="meal_order_total_matches_parts",
             ),
@@ -1074,6 +1140,10 @@ class MealOrder(UUIDTimeStampedModel):
     @property
     def legacy_choice_availability(self):
         return self.registration.availability if self.legacy_availability == "legacy" else self.legacy_availability
+
+    @property
+    def beverage_choice_availability(self):
+        return self.registration.availability if self.beverage_availability == "legacy" else self.beverage_availability
 
     def clean(self):
         super().clean()
@@ -1091,7 +1161,10 @@ class MealOrder(UUIDTimeStampedModel):
                     continue
                 if option.event_day_id not in (None, event_day_id):
                     errors[field] = _("Ce choix doit être commun ou appartenir à la journée d'inscription.")
-                preserved = previous is not None and getattr(previous, f"{field}_id") == option.pk
+                preserved = (
+                    previous is not None and previous.registration_id == self.registration_id
+                    and getattr(previous, f"{field}_id") == option.pk
+                )
                 if not option.is_active and not preserved:
                     errors[field] = _("Ce choix n'est plus proposé.")
             for field in ("morning_snack", "afternoon_snack"):
@@ -1102,6 +1175,48 @@ class MealOrder(UUIDTimeStampedModel):
                     errors[field] = _("Les collations supplémentaires sont réservées à une présence à la journée.")
                 elif snack.meal_type != Menu.MealType.SNACK:
                     errors[field] = _("Choisissez une collation pour cette période.")
+            event = self.registration.event_day.event
+            availability = self.registration.availability
+            phase_rules = {
+                Registration.Availability.MORNING: (
+                    Beverage.Temperature.HOT, event.morning_hot_beverage_enabled,
+                ),
+                Registration.Availability.AFTERNOON: (
+                    Beverage.Temperature.COLD, event.afternoon_cold_beverage_enabled,
+                ),
+            }
+            if self.beverage_id and availability in phase_rules:
+                preserved = (
+                    previous is not None and previous.registration_id == self.registration_id
+                    and previous.beverage_id == self.beverage_id
+                    and previous.beverage_choice_availability == availability
+                )
+                temperature, enabled = phase_rules[availability]
+                if not preserved:
+                    if not enabled:
+                        errors["beverage"] = _("La boisson de cette collation est désactivée pour cet événement.")
+                    elif self.beverage.temperature != temperature:
+                        errors["beverage"] = _("Choisissez une boisson chaude le matin ou fraîche l'après-midi.")
+            for field, snack_field, temperature, enabled in (
+                ("morning_beverage", "morning_snack", Beverage.Temperature.HOT, event.morning_hot_beverage_enabled),
+                ("afternoon_beverage", "afternoon_snack", Beverage.Temperature.COLD, event.afternoon_cold_beverage_enabled),
+            ):
+                beverage = getattr(self, field)
+                if beverage is None:
+                    continue
+                preserved = (
+                    previous is not None and previous.registration_id == self.registration_id
+                    and getattr(previous, f"{field}_id") == beverage.pk
+                )
+                if availability != Registration.Availability.FULL_DAY:
+                    errors[field] = _("Ces boissons supplémentaires sont réservées à une présence à la journée.")
+                elif not getattr(self, f"{snack_field}_id"):
+                    errors[field] = _("Choisissez la collation correspondante avant d'ajouter sa boisson.")
+                elif not preserved:
+                    if not enabled:
+                        errors[field] = _("Cette boisson de collation est désactivée pour cet événement.")
+                    elif beverage.temperature != temperature:
+                        errors[field] = _("Choisissez une boisson chaude le matin ou fraîche l'après-midi.")
             if self.menu_id:
                 expected = (
                     Menu.MealType.FULL_MEAL
@@ -1110,7 +1225,8 @@ class MealOrder(UUIDTimeStampedModel):
                 )
                 if self.menu.meal_type != expected:
                     preserved = (
-                        previous is not None and previous.menu_id == self.menu_id
+                        previous is not None and previous.registration_id == self.registration_id
+                        and previous.menu_id == self.menu_id
                         and previous.legacy_availability in (self.registration.availability, "legacy")
                         and self.legacy_availability in (previous.legacy_availability, self.registration.availability)
                     )
@@ -1178,8 +1294,13 @@ class MealOrder(UUIDTimeStampedModel):
             raise ValidationError(_("Un menu ou une collation n'est plus disponible. Rechargez la page."))
         for field in self.MENU_COMPONENTS:
             setattr(self, field, menus.get(getattr(self, f"{field}_id")))
-        if self.beverage_id:
-            self.beverage = Beverage.objects.select_for_update(of=("self",)).get(pk=self.beverage_id)
+        beverage_ids = {getattr(self, f"{field}_id") for field in self.BEVERAGE_COMPONENTS} - {None}
+        beverages = {option.pk: option for option in Beverage.objects.select_for_update(of=("self",))
+                     .filter(pk__in=beverage_ids).order_by("pk")}
+        if set(beverages) != beverage_ids:
+            raise ValidationError(_("Une boisson n'est plus disponible. Rechargez la page."))
+        for field in self.BEVERAGE_COMPONENTS:
+            setattr(self, field, beverages.get(getattr(self, f"{field}_id")))
         if not self.wants_meal:
             for component in self.PRICE_COMPONENTS:
                 setattr(self, component, None)
@@ -1206,9 +1327,10 @@ class MealOrder(UUIDTimeStampedModel):
             if previous is None or is_current else previous.official_exemption_applied
         )
         self.apply_official_pricing(is_official)
+        self.beverage_availability = self.registration.availability if self.beverage_id else ""
         self.full_clean()
         if update_fields is not None:
-            kwargs["update_fields"] = set(update_fields) | set(self.pricing_update_fields())
+            kwargs["update_fields"] = set(update_fields) | set(self.pricing_update_fields()) | {"beverage_availability"}
             if not self.wants_meal:
                 kwargs["update_fields"].update(self.PRICE_COMPONENTS)
         super().save(*args, **kwargs)

@@ -24,6 +24,7 @@ _EVENT_FIELDS = (
     "general_instructions",
     "sumup_payment_url",
 )
+_EVENT_FLAG_FIELDS = ("morning_hot_beverage_enabled", "afternoon_cold_beverage_enabled")
 _STATION_FIELDS = ("name", "description", "instructions", "category", "age_policy", "is_active", "position")
 _CATERING_FIELDS = ("name", "description", "surcharge_cents", "is_active")
 
@@ -46,7 +47,7 @@ def build_event_snapshot(event):
     day_offsets = {day.pk: (day.date - days[0].date).days for day in days}
     snapshot = {
         "version": 1,
-        "event": {field: getattr(event, field) for field in _EVENT_FIELDS},
+        "event": {field: getattr(event, field) for field in (*_EVENT_FIELDS, *_EVENT_FLAG_FIELDS)},
         "event_name": event.name,
         "windows": windows,
         "days": [],
@@ -64,7 +65,8 @@ def build_event_snapshot(event):
                     for menu in day.menus.all()
                 ],
                 "beverages": [
-                    {field: getattr(drink, field) for field in _CATERING_FIELDS}
+                    {**{field: getattr(drink, field) for field in _CATERING_FIELDS},
+                     "temperature": drink.temperature}
                     for drink in day.beverages.all()
                 ],
             }
@@ -107,6 +109,11 @@ def _profile_configuration(profile, event_date):
         raise ValidationError("Ce profil ne contient pas une configuration utilisable.")
     try:
         event_fields = {field: snapshot["event"].get(field, "") for field in _EVENT_FIELDS}
+        for field in _EVENT_FLAG_FIELDS:
+            value = snapshot["event"].get(field, True)
+            if type(value) is not bool:
+                raise ValidationError("Les réglages des boissons de ce profil sont invalides.")
+            event_fields[field] = value
         anchor = datetime.combine(event_date, time.min)
         windows = {
             field: timezone.make_aware(
@@ -152,7 +159,8 @@ def create_event_from_profile(*, profile, name, event_date):
                 menu.save()
             for drink_data in day_config.get("beverages", []):
                 drink = Beverage(
-                    event_day=day, **{field: drink_data[field] for field in _CATERING_FIELDS}
+                    event_day=day, **{field: drink_data[field] for field in _CATERING_FIELDS},
+                    temperature=drink_data.get("temperature", Beverage.Temperature.UNSPECIFIED),
                 )
                 drink.full_clean()
                 drink.save()

@@ -9,15 +9,25 @@ from .services import BusinessRuleError, save_meal_order, save_registration
 def save_participation(*, member, event_day, availability, preferred_station=None, note="", actor,
                        meal_choices=None):
     has_locked_snacks = False
-    if meal_choices is None and availability != Registration.Availability.FULL_DAY:
+    if meal_choices is None:
         # Le verrou membre suit l'ordre du service d'inscription et empêche une
         # commande concurrente de modifier les choix avant leur vérification.
         Member.objects.select_for_update(of=("self",)).get(pk=member.pk)
         current_order = MealOrder.objects.filter(
             registration__member=member, registration__event_day=event_day, wants_meal=True,
-        ).only("morning_snack_id", "afternoon_snack_id").first()
+        ).select_related("registration").only(
+            "morning_snack_id", "afternoon_snack_id", "morning_beverage_id", "afternoon_beverage_id",
+            "beverage_id", "beverage_availability", "registration__availability",
+        ).first()
         has_locked_snacks = bool(current_order and (
-            current_order.morning_snack_id or current_order.afternoon_snack_id
+            (
+                availability != Registration.Availability.FULL_DAY and any((
+                    current_order.morning_snack_id, current_order.afternoon_snack_id,
+                    current_order.morning_beverage_id, current_order.afternoon_beverage_id,
+                ))
+            ) or (
+                current_order.beverage_id and current_order.beverage_choice_availability != availability
+            )
         ))
     registration = save_registration(
         member=member, event_day=event_day, availability=availability,
@@ -27,7 +37,7 @@ def save_participation(*, member, event_day, availability, preferred_station=Non
         # Lever après le contrôle d'accès de save_registration et annuler toute
         # modification de présence/tarif dans la transaction courante.
         raise BusinessRuleError(
-            "Les repas sont clôturés. Contactez l’organisation pour modifier la présence et les collations ensemble."
+            "Les repas sont clôturés. Contactez l’organisation pour modifier la présence, les collations et les boissons ensemble."
         )
     if meal_choices is not None:
         save_meal_order(registration=registration, actor=actor, actor_is_organizer=False, **meal_choices)

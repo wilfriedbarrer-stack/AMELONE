@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% load static i18n volunteer_extras %}
 {% block title %}Tickets nominatifs — {{ event.name }}{% endblock %}
 {% block body_class %}meal-tickets-page{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/meal-tickets.css' %}?v=2">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/meal-tickets.css' %}?v=3">{% endblock %}
 {% block content %}
 <header class="page-header no-print">
   <div class="shell header-copy">
@@ -23,14 +23,21 @@
       {% for ticket in sheet %}
       {% if ticket %}
       <article class="meal-ticket">
-        <div class="meal-ticket-brand">{% if association_logo %}<img class="meal-ticket-logo" src="{{ ticket_logo_url }}" alt="Logo Amelone Loisirs">{% endif %}<strong>AMELONE LOISIRS</strong><span>Restauration</span></div>
-        <div class="meal-ticket-event"><strong>{{ ticket.event_name }}</strong><span>{% language "fr" %}{{ ticket.event_date|date:"l j F Y" }}{% endlanguage %}</span></div>
+        <div class="meal-ticket-heading">
+          {% if association_logo %}<img class="meal-ticket-logo" src="{{ ticket_logo_url }}" alt="Logo Amelone Loisirs">{% endif %}
+          <div class="meal-ticket-heading-copy">
+            <div class="meal-ticket-brand"><strong>AMELONE LOISIRS</strong><span>Restauration</span></div>
+            <div class="meal-ticket-event"><strong>{{ ticket.event_name }}</strong><span>{% language "fr" %}{{ ticket.event_date|date:"l j F Y" }}{% endlanguage %}</span></div>
+          </div>
+        </div>
         <h2 class="meal-ticket-name">{{ ticket.full_name }}</h2>
         <dl class="meal-ticket-choices">
           <div><dt>{{ ticket.meal_type_label }}</dt><dd>{{ ticket.menu_name }}</dd></div>
+          <div><dt>{{ ticket.beverage_label }}</dt><dd>{{ ticket.beverage_name }}</dd></div>
           {% if ticket.morning_snack_name %}<div><dt>Collation du matin</dt><dd>{{ ticket.morning_snack_name }}</dd></div>{% endif %}
+          {% if ticket.morning_beverage_name %}<div><dt>Boisson chaude du matin</dt><dd>{{ ticket.morning_beverage_name }}</dd></div>{% endif %}
           {% if ticket.afternoon_snack_name %}<div><dt>Collation de l’après-midi</dt><dd>{{ ticket.afternoon_snack_name }}</dd></div>{% endif %}
-          <div><dt>Boisson</dt><dd>{{ ticket.beverage_name }}</dd></div>
+          {% if ticket.afternoon_beverage_name %}<div><dt>Boisson fraîche de l’après-midi</dt><dd>{{ ticket.afternoon_beverage_name }}</dd></div>{% endif %}
         </dl>
         <p class="meal-ticket-payment{% if ticket.note_settled %} is-settled{% endif %}">{{ ticket.note_status_label }}{% if not ticket.note_settled %} — reste : {{ ticket.note_remaining_cents|euros }}{% endif %}</p>
         <div class="meal-ticket-reference">{% if ticket.official_exemption %}<span class="meal-ticket-official">Officiel — sans supplément</span>{% endif %}{{ ticket.reference }}</div>

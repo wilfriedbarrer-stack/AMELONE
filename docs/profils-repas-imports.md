@@ -36,8 +36,10 @@ Le participant choisit dans le même formulaire sa présence, son poste souhait�
 son repas ou sa collation, sa boisson et son paiement souhaité :
 
 - journée complète : menus de type **repas complet**, avec choix facultatifs
-  d’une collation le matin et d’une collation l’après-midi ;
-- matin ou après-midi : menus de type **collation** ;
+  d’une collation le matin et d’une collation l’après-midi, chacune avec sa boisson
+  facultative : chaude le matin, fraîche l’après-midi ;
+- matin ou après-midi : menus de type **collation**, avec une boisson facultative
+  chaude le matin ou fraîche l’après-midi ;
 - possibilité explicite de ne demander ni repas ni collation ;
 - paiement au comptoir ou via lien SumUp.
 
@@ -57,12 +59,24 @@ souhaité est pris en compte. Le changement de poste actualise les suppléments 
 le solde ; les paiements déjà enregistrés et l’historique restent conservés.
 Les collations supplémentaires ne sont proposées qu’à la journée.
 
+Dans **Modifier l’événement**, les deux cases **Proposer une boisson chaude avec
+la collation du matin** et **Proposer une boisson fraîche avec la collation de
+l’après-midi** permettent d’activer ou de désactiver ces choix indépendamment.
+Le participant peut toujours choisir **Sans boisson**. Une désactivation conserve
+les choix déjà réservés et leurs tarifs ; elle empêche les nouvelles réservations
+de cette boisson. Les profils réutilisables et la duplication conservent ces réglages.
+
 ## Catalogue commun à tous les événements
 
 Ouvrir **Administration → Menus et boissons** pour créer, modifier ou désactiver
 les repas, collations et boissons communs. Les choix actifs sont proposés
 automatiquement sur tous les événements, y compris ceux déjà créés. Les tarifs
 enregistrés sur les réservations antérieures restent conservés.
+
+Pour chaque boisson, renseigner **Chaude** ou **Fraîche**. Les anciennes boissons
+sont conservées avec la catégorie **À classer** : les modifier dans ce catalogue
+pour les proposer avec les collations. Elles restent proposées avec le repas
+principal et leurs réservations existantes sont conservées.
 
 Les anciennes options propres à une date restent disponibles pour cette date.
 Pour les proposer partout, utiliser **Rendre commun** et confirmer : les choix
@@ -92,13 +106,18 @@ Collation;Fruit et biscuit;0;collation
 Boissons :
 
 ```csv
-nom;description;supplement_euros
-Eau;Bouteille;0
-Jus de pomme;Verre;1,50
+nom;description;supplement_euros;temperature
+Eau;Bouteille;0;fraîche
+Jus de pomme;Verre;1,50;fraîche
+Café;Tasse;1;chaude
 ```
 
 Seul `nom` est obligatoire. Un montant absent vaut 0 ; un type absent vaut repas
-complet. Les valeurs `full_meal` et `snack` sont également acceptées. Les noms sont
+complet. Les valeurs `full_meal` et `snack` sont également acceptées.
+Pour les boissons, `temperature` est facultative et accepte `chaude`, `fraîche`
+ou `à classer` (également `hot`, `cold`, `unspecified`). Une colonne absente ou vide
+conserve la catégorie d’une boisson existante ; une nouvelle boisson reste à classer.
+Les noms sont
 uniques par date pour l’import local. Dans le catalogue commun, les menus sont
 identifiés par leur nom et leur type, les boissons par leur nom : un choix
 existant sera mis à jour seulement après confirmation

@@ -15,5 +15,6 @@ def menu_options_for_day(event_day, *, active_only=True):
     return _options_for_day(Menu, event_day, active_only=active_only)
 
 
-def beverage_options_for_day(event_day, *, active_only=True):
-    return _options_for_day(Beverage, event_day, active_only=active_only)
+def beverage_options_for_day(event_day, *, active_only=True, temperature=None):
+    options = _options_for_day(Beverage, event_day, active_only=active_only)
+    return options.filter(temperature=temperature) if temperature is not None else options

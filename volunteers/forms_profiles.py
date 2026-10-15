@@ -59,6 +59,12 @@ class ReusableProfileForm(ProfileVersionMixin, OrganizerFormMixin, forms.Form):
         label="Consignes générales", required=False,
         widget=forms.Textarea(attrs={"rows": 3}),
     )
+    morning_hot_beverage_enabled = forms.BooleanField(
+        label="Proposer une boisson chaude avec la collation du matin", required=False, initial=True,
+    )
+    afternoon_cold_beverage_enabled = forms.BooleanField(
+        label="Proposer une boisson fraîche avec la collation de l’après-midi", required=False, initial=True,
+    )
 
     def __init__(self, *args, profile=None, **kwargs):
         self.profile = profile
@@ -73,6 +79,8 @@ class ReusableProfileForm(ProfileVersionMixin, OrganizerFormMixin, forms.Form):
                 "location": event.get("location", ""),
                 "event_description": event.get("description", ""),
                 "general_instructions": event.get("general_instructions", ""),
+                "morning_hot_beverage_enabled": event.get("morning_hot_beverage_enabled", True),
+                "afternoon_cold_beverage_enabled": event.get("afternoon_cold_beverage_enabled", True),
                 "expected_updated_at": profile.updated_at.isoformat(),
             })
         super().__init__(*args, **kwargs)

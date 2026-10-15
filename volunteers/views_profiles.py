@@ -169,7 +169,8 @@ def event_profile_new(request):
         try:
             profile = create_reusable_profile(**{
                 field: form.cleaned_data[field] for field in
-                ("name", "description", "location", "event_description", "general_instructions")
+                ("name", "description", "location", "event_description", "general_instructions",
+                 "morning_hot_beverage_enabled", "afternoon_cold_beverage_enabled")
             })
         except ValidationError as error:
             _profile_form_errors(form, error)
@@ -195,7 +196,8 @@ def event_profile_update(request, profile_id):
             update_reusable_profile(
                 profile=profile, expected_updated_at=form.cleaned_data["expected_updated_at"],
                 **{field: form.cleaned_data[field] for field in
-                   ("name", "description", "location", "event_description", "general_instructions")},
+                   ("name", "description", "location", "event_description", "general_instructions",
+                    "morning_hot_beverage_enabled", "afternoon_cold_beverage_enabled")},
             )
         except ValidationError as error:
             _profile_form_errors(form, error)
