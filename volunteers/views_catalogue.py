@@ -240,7 +240,10 @@ def _meal_rows(event):
             else "Collation"
         )
         choice = "Réservé" if has_meal else "Pas de repas" if order else "Non renseigné"
-        payment = order.get_payment_method_display() if has_meal else "—"
+        payment = (
+            "Officiel — sans supplément" if has_meal and order.official_exemption_applied
+            else order.get_payment_method_display() if has_meal else "—"
+        )
         rows.append({
             "registration": registration,
             "order": order,

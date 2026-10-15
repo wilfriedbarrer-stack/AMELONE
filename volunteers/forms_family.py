@@ -19,6 +19,36 @@ from .models import Beverage, Family, MealOrder, Member, Menu, Registration, Sta
 User = get_user_model()
 
 
+def official_meal_exemption(member, meal_order=None, *, reactivating=False):
+    if meal_order:
+        registration = meal_order.registration
+        if (
+            registration.event_day.date < timezone.localdate()
+            or (registration.status != Registration.Status.ACTIVE and not reactivating)
+        ):
+            return meal_order.official_exemption_applied
+    return bool(member and member.is_competition_official)
+
+
+def configure_official_meal_pricing(form, member, meal_order=None, *, reactivating=False):
+    """Présente le tarif personnel issu de l'habilitation du membre."""
+    form.official_exemption = official_meal_exemption(member, meal_order, reactivating=reactivating)
+    if not form.official_exemption:
+        return
+    for name in ("menu", "beverage"):
+        if name in form.fields:
+            form.fields[name].label_from_instance = (
+                lambda option: f"{option.name} — 0,00 € (officiel)"
+            )
+    if "payment_method" in form.fields:
+        field = form.fields["payment_method"]
+        field.widget = forms.HiddenInput()
+        field.disabled = True
+        field.required = False
+        field.initial = MealOrder.PaymentMethod.COUNTER
+        form.initial["payment_method"] = MealOrder.PaymentMethod.COUNTER
+
+
 class SignUpForm(UserCreationForm):
     """Crée atomiquement le responsable et son compte famille."""
 
@@ -192,8 +222,9 @@ class FamilyRegistrationForm(forms.Form):
         ).order_by("name"), self.member, event_day)
         self.meal_choices_open = allow_closed_meals or event_day.event.meal_orders_are_open()
         self.menu_options = []
+        order = MealOrder.objects.filter(registration=registration).first() if registration else None
+        self.official_exemption = official_meal_exemption(self.member, order, reactivating=True)
         if self.meal_choices_open:
-            order = MealOrder.objects.filter(registration=registration).first() if registration else None
             availability = self.data.get("availability") if self.is_bound else self.initial.get("availability", Registration.Availability.FULL_DAY)
             expected = Menu.MealType.FULL_MEAL if availability == Registration.Availability.FULL_DAY else Menu.MealType.SNACK
             menus = Menu.objects.filter(event_day=event_day).filter(Q(is_active=True) | Q(pk=order.menu_id if order else None))
@@ -208,7 +239,8 @@ class FamilyRegistrationForm(forms.Form):
             self.fields["payment_method"] = forms.ChoiceField(label="Mode de paiement souhaité", choices=MealOrder.PaymentMethod.choices, initial=MealOrder.PaymentMethod.COUNTER, required=False)
             self.initial.update({"no_meal": not order.wants_meal if order else not menus.filter(allowed).exists(), "menu": order.menu_id if order else None, "beverage": order.beverage_id if order else None, "payment_method": order.payment_method if order else MealOrder.PaymentMethod.COUNTER})
             for menu in menus:
-                self.menu_options.append({"id": str(menu.pk), "name": menu.name, "type": menu.meal_type, "surcharge": menu.surcharge_cents, "legacy": order.legacy_choice_availability if order and order.menu_id == menu.pk else ""})
+                self.menu_options.append({"id": str(menu.pk), "name": menu.name, "type": menu.meal_type, "surcharge": 0 if self.official_exemption else menu.surcharge_cents, "legacy": order.legacy_choice_availability if order and order.menu_id == menu.pk else ""})
+        configure_official_meal_pricing(self, self.member, order, reactivating=True)
 
     def clean(self):
         cleaned = super().clean()
@@ -267,6 +299,7 @@ class FamilyMealForm(forms.Form):
         self.fields["menu"].queryset = Menu.objects.filter(event_day=event_day).filter(allowed).order_by("name")
         self.fields["menu"].label = "Repas complet" if expected == Menu.MealType.FULL_MEAL else "Collation"
         self.fields["beverage"].queryset = Beverage.objects.filter(event_day=event_day).filter(Q(is_active=True) | Q(pk=meal_order.beverage_id if meal_order else None)).order_by("name")
+        configure_official_meal_pricing(self, registration.member, meal_order)
 
     def clean(self):
         cleaned_data = super().clean()

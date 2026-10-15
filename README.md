@@ -170,3 +170,16 @@ conserve les habilitations de comptes déjà reliés à leur participant personn
 Les anciennes confirmations officielles futures sans habilitation individuelle
 repassent en brouillon ; l’administrateur doit habiliter le membre avant de les
 confirmer à nouveau.
+
+## Repas et boissons sans supplément pour les officiels
+
+Un participant habilité **Officiel de compétition** ne paie aucun supplément pour
+son repas ou sa collation et sa boisson. Cette gratuité suit son habilitation
+individuelle ; les autres membres de sa famille gardent leurs tarifs habituels.
+Les formulaires, récapitulatifs et soldes affichent les montants réellement dus.
+
+Attribuer ou retirer la fonction recalcule les réservations actives d’aujourd’hui
+et à venir. Les tarifs initialement réservés sont conservés pour être réappliqués
+en cas de retrait, même si le catalogue a changé entre-temps. Les réservations
+passées et les paiements enregistrés sont conservés. Un éventuel trop-perçu reste
+visible dans le solde de la famille.

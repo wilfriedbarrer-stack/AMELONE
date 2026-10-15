@@ -245,6 +245,22 @@ def save_registration(
             code="duplicate_registration",
         ) from exc
 
+    # Réactiver une inscription réactive le tarif de l'habilitation actuelle.
+    # Pas de validation du repas ici : la présence et son nouveau menu peuvent
+    # être enregistrés dans la même transaction par save_participation().
+    if registration.event_day.date >= timezone.localdate():
+        existing_order = MealOrder.objects.select_for_update(of=("self",)).filter(
+            registration=registration
+        ).first()
+        if existing_order:
+            existing_order.apply_official_pricing(locked_member.is_competition_official)
+            existing_order.updated_at = timezone.now()
+            MealOrder.objects.bulk_update([existing_order], (
+                "menu_standard_surcharge_cents", "beverage_standard_surcharge_cents",
+                "official_exemption_applied", "menu_surcharge_cents",
+                "beverage_surcharge_cents", "total_surcharge_cents", "updated_at",
+            ))
+
     invalidated = _cancel_incompatible_assignments(
         registration,
         actor=actor,
@@ -514,11 +530,7 @@ def save_meal_order(
         )
     # ``drink`` est l'alias historique utilisé par les premières vues.
     beverage = beverage or drink
-    locked_registration = (
-        Registration.objects.select_for_update(of=("self",))
-        .select_related("member__family", "event_day__event")
-        .get(pk=registration.pk)
-    )
+    locked_registration = _lock_assignment_registrations({registration.pk})[registration.pk]
     _check_member_access(actor, locked_registration.member, organizer=organizer)
     _check_meal_window(locked_registration.event_day.event, organizer=organizer)
     if locked_registration.status != Registration.Status.ACTIVE:
