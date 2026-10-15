@@ -47,7 +47,7 @@ class OfficialVolunteerPricingFormsTests(DataMixin, TestCase):
             self.assertIn(f"{price} €", form.fields[name].label_from_instance(option))
             self.assertNotIn("(officiel)", form.fields[name].label_from_instance(option))
         self.assertFalse(form.fields["payment_method"].widget.is_hidden)
-        self.assertFalse(form.fields["payment_method"].disabled)
+        self.assertEqual(form.fields["payment_method"].disabled, form.preview_total_cents == 0)
 
     def test_new_volunteer_preference_shows_four_prices_and_keeps_payment_choice(self):
         form = FamilyRegistrationForm(

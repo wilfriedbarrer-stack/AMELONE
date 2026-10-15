@@ -1,6 +1,6 @@
 """Édition indépendante des configurations réutilisables d'événements.
 
-Les postes et créneaux restent dans le JSON du profil. Aucune modification
+Les postes et créneaux restent dans le JSON du modèle. Aucune modification
 n'est répercutée sur un événement déjà créé à partir de cette configuration.
 """
 
@@ -61,7 +61,7 @@ def _snapshot(profile):
         or not isinstance(snapshot.get("days"), list)
         or not isinstance(snapshot.get("stations", []), list)
     ):
-        raise ValidationError("Ce profil ne contient pas une configuration utilisable.")
+        raise ValidationError("Ce modèle ne contient pas une configuration utilisable.")
     offsets = set()
     for day in snapshot["days"]:
         if (
@@ -70,10 +70,10 @@ def _snapshot(profile):
             or day["offset"] < 0
             or day["offset"] in offsets
         ):
-            raise ValidationError("Les journées enregistrées dans ce profil sont invalides.")
+            raise ValidationError("Les journées enregistrées dans ce modèle sont invalides.")
         offsets.add(day["offset"])
     if 0 not in offsets:
-        raise ValidationError("Le profil doit contenir sa première journée.")
+        raise ValidationError("Le modèle doit contenir sa première journée.")
     snapshot.setdefault("stations", [])
     return snapshot
 
@@ -82,14 +82,14 @@ def _locked_profile(profile, expected_updated_at):
     try:
         current = EventProfile.objects.select_for_update(of=("self",)).get(pk=profile.pk)
     except EventProfile.DoesNotExist as error:
-        raise ValidationError("Ce profil d'événement a été supprimé. Rechargez la liste.") from error
+        raise ValidationError("Ce modèle d'événement a été supprimé. Rechargez la liste.") from error
     try:
         expected = parse_datetime(expected_updated_at) if isinstance(expected_updated_at, str) else None
     except ValueError:
         expected = None
     if expected is None or timezone.is_naive(expected) or expected != current.updated_at:
         raise ValidationError(
-            "Ce profil a été modifié depuis l'ouverture du formulaire. "
+            "Ce modèle a été modifié depuis l'ouverture du formulaire. "
             "Rechargez la page avant de réessayer."
         )
     return current
@@ -101,7 +101,7 @@ def _save(profile):
         with transaction.atomic():
             profile.save()
     except IntegrityError as error:
-        raise ValidationError({"name": "Un profil porte déjà ce nom."}) from error
+        raise ValidationError({"name": "Un modèle porte déjà ce nom."}) from error
     return profile
 
 
@@ -162,7 +162,7 @@ def update_reusable_profile(*, profile, expected_updated_at, name, description,
 
 def _index(index, stations):
     if type(index) is not int or not 0 <= index < len(stations):
-        raise ValidationError("Ce poste n'existe plus dans le profil. Rechargez la page.")
+        raise ValidationError("Ce poste n'existe plus dans le modèle. Rechargez la page.")
     return index
 
 
@@ -210,7 +210,7 @@ def _slots(slots, day_offsets):
         period = data.get("period")
         capacity = data.get("capacity")
         if type(offset) is not int or offset not in day_offsets:
-            raise ValidationError("Ce créneau ne correspond à aucune journée du profil.")
+            raise ValidationError("Ce créneau ne correspond à aucune journée du modèle.")
         if not isinstance(period, str) or period not in StationSlot.Period.values:
             raise ValidationError({"period": "Choisissez une période valide."})
         if (offset, period) in seen:
@@ -247,7 +247,7 @@ def save_profile_station(*, profile, expected_updated_at, station_data, slots, s
         if index != station_index and isinstance(other, dict) and (
             str(other.get("name", "")).strip().casefold() == data["name"].casefold()
         ):
-            raise ValidationError({"name": "Un poste porte déjà ce nom dans le profil."})
+            raise ValidationError({"name": "Un poste porte déjà ce nom dans le modèle."})
     data["slots"] = _slots(slots, {day["offset"] for day in snapshot["days"]})
     if station_index is None:
         snapshot["stations"].append(data)

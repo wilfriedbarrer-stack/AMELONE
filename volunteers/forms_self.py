@@ -10,9 +10,9 @@ from .models import Assignment, MealOrder, Member, StationSlot
 
 class PersonalProfileForm(forms.Form):
     existing_member = forms.ModelChoiceField(
-        label="Mon profil existe déjà parmi les membres",
+        label="Mon profil de participant",
         queryset=Member.objects.none(), required=False,
-        empty_label="Créer mon profil avec les informations ci-dessous",
+        empty_label="Créer un nouveau participant",
     )
     first_name = forms.CharField(label="Prénom", max_length=150, required=False)
     last_name = forms.CharField(label="Nom", max_length=150, required=False)
@@ -23,6 +23,7 @@ class PersonalProfileForm(forms.Form):
 
     def __init__(self, *args, user, member=None, **kwargs):
         self.member = member
+        self.has_existing_member_choices = False
         super().__init__(*args, **kwargs)
         if member:
             self.fields.pop("existing_member")
@@ -32,6 +33,7 @@ class PersonalProfileForm(forms.Form):
             self.fields["existing_member"].queryset = Member.objects.filter(
                 family__account=user, archived_at__isnull=True, user__isnull=True,
             )
+            self.has_existing_member_choices = self.fields["existing_member"].queryset.exists()
             self.initial.update({"first_name": user.first_name, "last_name": user.last_name})
 
     def clean(self):
@@ -86,6 +88,8 @@ class PersonalRegistrationForm(FamilyRegistrationForm):
             )
             if registration:
                 self.initial["station_slots"] = current_slot_ids
+            self.order_fields(("availability", "station_slots", "no_meal", "morning_snack", "morning_beverage",
+                               "menu", "beverage", "afternoon_snack", "afternoon_beverage", "payment_method", "note"))
             order = MealOrder.objects.filter(registration=registration).first() if registration else None
             configure_official_meal_pricing(self, member, order, reactivating=True)
 

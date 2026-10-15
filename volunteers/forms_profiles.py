@@ -1,4 +1,4 @@
-"""Choix d'un profil et de la date du nouvel événement."""
+"""Choix d'un modèle et de la date du nouvel événement."""
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -12,6 +12,7 @@ class SaveEventProfileForm(OrganizerFormMixin, forms.ModelForm):
     class Meta:
         model = EventProfile
         fields = ("name", "description")
+        labels = {"name": "Nom du modèle", "description": "Note interne (facultative)"}
         widgets = {"description": forms.Textarea(attrs={"rows": 3})}
 
 
@@ -25,8 +26,8 @@ class CreateFromProfileForm(OrganizerFormMixin, forms.Form):
 
 class ProfileEventCreationForm(CreateFromProfileForm):
     profile = forms.ModelChoiceField(
-        label="Profil d’événement", queryset=EventProfile.objects.all(),
-        empty_label="Choisir un profil réutilisable",
+        label="Modèle d’événement", queryset=EventProfile.objects.all(), required=False,
+        empty_label="Événement vierge — sans modèle",
     )
 
     def __init__(self, *args, **kwargs):
@@ -38,21 +39,21 @@ class ProfileVersionMixin:
     def clean(self):
         cleaned = super().clean()
         if self.fields["expected_updated_at"].required and not cleaned.get("expected_updated_at"):
-            raise ValidationError("La version de ce profil est manquante ou invalide. Actualisez la page avant d’enregistrer.")
+            raise ValidationError("La version de ce modèle est manquante ou invalide. Actualisez la page avant d’enregistrer.")
         return cleaned
 
 
 class ReusableProfileForm(ProfileVersionMixin, OrganizerFormMixin, forms.Form):
     expected_updated_at = forms.CharField(widget=forms.HiddenInput, max_length=100)
-    name = forms.CharField(label="Nom du profil réutilisable", max_length=200)
+    name = forms.CharField(label="Nom du modèle", max_length=200)
     description = forms.CharField(
-        label="Description du profil", required=False,
+        label="Note interne (facultative)", required=False,
         widget=forms.Textarea(attrs={"rows": 3}),
-        help_text="Une note pour retrouver ce modèle dans la liste des profils.",
+        help_text="Une note réservée aux organisateurs pour retrouver ce modèle.",
     )
     location = forms.CharField(label="Lieu habituel", max_length=255)
     event_description = forms.CharField(
-        label="Description proposée pour les événements", required=False,
+        label="Présentation publique proposée pour les événements", required=False,
         widget=forms.Textarea(attrs={"rows": 3}),
     )
     general_instructions = forms.CharField(
@@ -96,7 +97,7 @@ class ProfileStationDeleteForm(ProfileVersionMixin, forms.Form):
 
 
 class ProfileSlotForm(OrganizerFormMixin, forms.Form):
-    day_offset = forms.TypedChoiceField(label="Journée du profil", coerce=int)
+    day_offset = forms.TypedChoiceField(label="Journée du modèle", coerce=int)
     period = forms.ChoiceField(
         label="Période", choices=[("", "Choisir une période"), *StationSlot.Period.choices],
     )
@@ -116,6 +117,19 @@ class ProfileSlotForm(OrganizerFormMixin, forms.Form):
             (offset, "Jour de l’événement" if offset == 0 else f"Jour + {offset}")
             for offset in day_offsets
         ]]
+        if len(day_offsets) == 1:
+            self.fields["day_offset"].widget = forms.HiddenInput()
+            self.fields["day_offset"].initial = day_offsets[0]
+
+    def has_changed(self):
+        if self.empty_permitted and self.fields["day_offset"].widget.is_hidden:
+            # The automatic day alone must not turn an unused extra row into
+            # a requested slot, including forms opened before this change.
+            if not any(self.data.get(self.add_prefix(field)) for field in (
+                "period", "capacity", "start_time", "end_time", "DELETE",
+            )):
+                return False
+        return super().has_changed()
 
     def clean(self):
         cleaned = super().clean()

@@ -1,4 +1,5 @@
 import secrets
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core import signing
@@ -19,6 +20,7 @@ from .catalogue_import import (
 from .forms_shared_catalogue import (
     SharedBeverageForm,
     SharedCatalogueConfirmForm,
+    SharedCatalogueFilterForm,
     SharedCataloguePromotionForm,
     SharedCatalogueUploadForm,
     SharedMenuForm,
@@ -51,8 +53,24 @@ def _form_errors(form, error):
 @organizer_required
 @never_cache
 def shared_catalogue(request):
+    data = request.GET.copy() if request.GET else None
+    if data is not None:
+        data.setdefault("status", "active")
+    filter_form = SharedCatalogueFilterForm(data)
+    filters = filter_form.cleaned_data if filter_form.is_bound and filter_form.is_valid() else {}
+    status = filters.get("status") or "active"
     menus = Menu.objects.filter(event_day__isnull=True).order_by("name")
     beverages = Beverage.objects.filter(event_day__isnull=True).order_by("name")
+    if status != "all":
+        menus = menus.filter(is_active=status == "active")
+        beverages = beverages.filter(is_active=status == "active")
+    query = filters.get("q")
+    if query:
+        matching = Q(name__icontains=query) | Q(description__icontains=query)
+        menus = menus.filter(matching)
+        beverages = beverages.filter(matching)
+    if filters.get("temperature"):
+        beverages = beverages.filter(temperature=filters["temperature"])
     local_days = EventDay.objects.filter(
         Q(menus__isnull=False) | Q(beverages__isnull=False)
     ).select_related("event").prefetch_related("menus", "beverages").distinct().order_by("-date", "event__name")
@@ -73,6 +91,11 @@ def shared_catalogue(request):
         "local_days": Paginator(local_days, 15).get_page(request.GET.get("page")),
         "local_events": local_events,
         "selected_event": selected_event,
+        "filter_form": filter_form,
+        "catalogue_query": query or "",
+        "catalogue_status": status,
+        "catalogue_temperature": filters.get("temperature") or "",
+        "catalogue_pagination_query": urlencode({key: value for key, value in request.GET.items() if key != "page"}),
     })
 
 

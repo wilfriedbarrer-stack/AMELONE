@@ -1,8 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Tableau de bord organisateur — AMELONE{% endblock %}
+{% block title %}Accueil de gestion — AMELONE{% endblock %}
 {% block content %}
-<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Espace organisateur</span><h1>Tableau de bord</h1><p>Pilotez les événements, affectations et suivis depuis un même endroit.</p></div><a class="button button-primary" href="{% url 'event_create' %}">Créer un événement</a></div></header>
-<div class="shell page-stack"><section class="stat-grid"><article class="stat-card"><span class="stat-value">{{ open_event_count }}</span><span class="stat-label">événement(s) ouvert(s)</span></article><article class="stat-card"><span class="stat-value">{{ family_count }}</span><span class="stat-label">famille(s)</span></article><article class="stat-card"><span class="stat-value">{{ member_count }}</span><span class="stat-label">membre(s) actif(s)</span></article><article class="stat-card"><span class="stat-value">{{ unassigned_count }}</span><span class="stat-label">disponibilité(s) à affecter</span></article></section>
-{% if failed_email_count %}<div class="alert alert-error"><strong>{{ failed_email_count }} envoi(s) email en échec.</strong> Ouvrez l’événement concerné pour les relancer.</div>{% endif %}
-<section class="panel"><div class="panel-heading"><div><span class="eyebrow">Événements</span><h2>À gérer</h2></div><a href="{% url 'event_list' %}">Tout voir</a></div><div class="responsive-table"><table><thead><tr><th>Événement</th><th>Lieu</th><th>Statut</th><th></th></tr></thead><tbody>{% for event in events %}<tr><td><strong>{{ event.name }}</strong></td><td>{{ event.location }}</td><td><span class="badge badge-neutral">{{ event.get_status_display }}</span></td><td class="table-actions"><a href="{% url 'event_detail' event.pk %}">Gérer</a></td></tr>{% empty %}<tr><td colspan="4">Aucun événement.</td></tr>{% endfor %}</tbody></table></div></section></div>
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Gestion de l’association</span><h1>Accueil de gestion</h1><p>Retrouvez vos événements et les actions qui restent à préparer.</p></div><div class="button-row"><a class="button button-primary" href="{% url 'event_create' %}">Créer un événement</a><a class="button button-secondary" href="{% url 'annual_tracking' %}">Suivi annuel</a></div></div></header>
+<div class="shell page-stack">
+  <section class="stat-grid" aria-label="Activité de l’association">
+    <article class="stat-card"><span class="stat-value">{{ open_event_count }}</span><span class="stat-label">événement{{ open_event_count|pluralize }} ouvert{{ open_event_count|pluralize }}</span></article>
+    <article class="stat-card"><span class="stat-value">{{ family_count }}</span><span class="stat-label">famille{{ family_count|pluralize }}</span></article>
+    <article class="stat-card"><span class="stat-value">{{ member_count }}</span><span class="stat-label">membre{{ member_count|pluralize }} actif{{ member_count|pluralize }}</span></article>
+    <article class="stat-card"><span class="stat-value">{{ unassigned_count }}</span><span class="stat-label">participant{{ unassigned_count|pluralize }} à affecter</span></article>
+  </section>
+  {% if failed_email_count %}<div class="alert alert-error"><strong>{{ failed_email_count }} message{{ failed_email_count|pluralize }} en échec.</strong> Ouvrez l’événement concerné, puis « Autres actions → Messages aux participants ».</div>{% endif %}
+  <section class="panel table-panel"><div class="panel-heading"><div><h2>Événements à gérer</h2></div><a href="{% url 'event_list' %}">Tous les événements</a></div>
+    <div class="responsive-table"><table class="mobile-card-table"><thead><tr><th>Événement</th><th>Lieu</th><th>Statut</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>
+      {% for event in events %}<tr><td data-label="Événement"><strong><a href="{% url 'event_detail' event.pk %}">{{ event.name }}</a></strong></td><td data-label="Lieu">{{ event.location }}</td><td data-label="Statut"><span class="badge badge-neutral">{{ event.get_status_display }}</span></td><td class="table-actions" data-label="Actions"><a href="{% url 'event_detail' event.pk %}">Ouvrir</a></td></tr>
+      {% empty %}<tr><td colspan="4">Aucun événement. Créez votre premier événement pour commencer.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+</div>
 {% endblock %}

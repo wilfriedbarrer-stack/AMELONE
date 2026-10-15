@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 from PIL import Image
 
-from volunteers.models import Member, Menu, SiteBranding, User
+from volunteers.models import Family, Member, Menu, SiteBranding, User
 from volunteers.tests.factories import DataMixin
 
 
@@ -26,9 +26,9 @@ class AdministrationTests(DataMixin, TestCase):
     def test_organizer_can_manage_options_but_not_rights(self):
         self.client.force_login(self.organizer)
         response = self.client.get(reverse("administration_dashboard"))
-        self.assertContains(response, "Créer un poste")
-        self.assertContains(response, "Créer un menu")
-        self.assertNotContains(response, "Gérer les profils et les droits")
+        self.assertContains(response, "Ouvrir le catalogue")
+        self.assertContains(response, "Gérer les modèles")
+        self.assertNotContains(response, "Gérer les comptes et droits")
         for name in ("profile_list", "branding_update"):
             self.assertEqual(self.client.get(reverse(name)).status_code, 403)
 
@@ -56,7 +56,7 @@ class AdministrationTests(DataMixin, TestCase):
         self.assertTrue(self.admin.is_superuser)
         self.assertTrue(self.admin.is_active)
 
-    def test_official_profile_alone_does_not_grant_management_rights(self):
+    def test_forged_official_field_in_account_editor_does_not_grant_any_function(self):
         self.client.force_login(self.admin)
         response = self.client.post(reverse("profile_update", args=[self.family_user.pk]), {
             "email": self.family_user.email, "role": "family", "is_active": "on",
@@ -64,11 +64,11 @@ class AdministrationTests(DataMixin, TestCase):
         })
         self.assertRedirects(response, reverse("profile_list"))
         self.family_user.refresh_from_db()
-        self.assertTrue(self.family_user.is_competition_official)
+        self.assertFalse(self.family_user.is_competition_official)
         self.assertFalse(self.family_user.is_superuser)
         self.assertFalse(self.family_user.is_staff)
         self.assertFalse(self.family_user.is_organizer)
-        self.assertContains(self.client.get(reverse("profile_list")), "Famille + Officiel de compétition")
+        self.assertNotContains(self.client.get(reverse("profile_update", args=[self.family_user.pk])), 'name="is_competition_official"')
         self.client.force_login(self.family_user)
         for name in ("administration_dashboard", "profile_list", "branding_update"):
             self.assertEqual(self.client.get(reverse(name)).status_code, 403)
@@ -76,17 +76,23 @@ class AdministrationTests(DataMixin, TestCase):
             "role": "administrator", "is_competition_official": "on",
         }).status_code, 403)
 
-    def test_administrator_can_add_and_remove_own_official_profile(self):
+    def test_administrator_can_add_and_remove_own_official_function_from_member_record(self):
         self.client.force_login(self.admin)
+        family = Family.objects.create(account=self.admin, name="Administrateur")
+        participant = Member.objects.create(
+            family=family, user=self.admin, first_name="Admin", last_name="Officiel",
+            birth_date=self.member.birth_date,
+        )
         for official in (True, False):
             with self.subTest(official=official):
                 data = {
-                    "email": self.admin.email, "role": "administrator", "is_active": "on",
+                    "first_name": participant.first_name, "last_name": participant.last_name,
+                    "birth_date": participant.birth_date.isoformat(),
                 }
                 if official:
                     data["is_competition_official"] = "on"
-                response = self.client.post(reverse("profile_update", args=[self.admin.pk]), data)
-                self.assertRedirects(response, reverse("profile_list"))
+                response = self.client.post(reverse("administrator_member_update", args=[family.pk, participant.pk]), data)
+                self.assertRedirects(response, reverse("administrator_family_detail", args=[family.pk]))
                 self.admin.refresh_from_db()
                 self.assertEqual(self.admin.is_competition_official, official)
                 self.assertTrue(self.admin.is_superuser)
@@ -96,7 +102,7 @@ class AdministrationTests(DataMixin, TestCase):
                 if official:
                     self.assertContains(
                         self.client.get(reverse("profile_list")),
-                        "Administrateur + Officiel de compétition",
+                        "Officiel de compétition",
                     )
 
     def test_official_flag_does_not_bypass_own_administrator_protection(self):

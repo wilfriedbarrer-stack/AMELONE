@@ -70,7 +70,7 @@ def event_profile_delete(request, profile_id):
     form = DeletionConfirmationForm(
         request.POST if request.method == "POST" else None,
         expected_updated_at=profile.updated_at.isoformat(),
-        confirm_label="Je confirme la suppression définitive de ce profil réutilisable.",
+        confirm_label="Je confirme la suppression définitive de ce modèle réutilisable.",
     )
     if request.method == "POST" and form.is_valid():
         try:
@@ -81,9 +81,9 @@ def event_profile_delete(request, profile_id):
         except ValidationError as error:
             _report_deletion_error(form, error)
         except EventProfile.DoesNotExist as error:
-            raise Http404("Ce profil a déjà été supprimé.") from error
+            raise Http404("Ce modèle a déjà été supprimé.") from error
         else:
-            messages.success(request, f"Le profil réutilisable « {result['name']} » a été supprimé.")
+            messages.success(request, f"Le modèle réutilisable « {result['name']} » a été supprimé.")
             return redirect("event_profile_list")
     snapshot = profile.snapshot if isinstance(profile.snapshot, dict) else {}
     stations = snapshot.get("stations", [])

@@ -1,12 +1,19 @@
 {% extends "base.html" %}
-{% block title %}{% if profile %}Modifier le profil {{ profile.name }}{% else %}Créer un profil d’événement{% endif %} — AMELONE{% endblock %}
+{% block title %}{% if profile %}Modifier le modèle {{ profile.name }}{% else %}Créer un modèle d’événement{% endif %} — AMELONE{% endblock %}
 {% block content %}
-<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Organisation · Profils d’événements</span><h1>{% if profile %}{{ profile.name }}{% else %}Créer un profil d’événement{% endif %}</h1><p>Préparez les informations et les postes de votre modèle, puis réutilisez-le à chaque nouvelle date.</p></div><div class="button-row">{% if profile %}<a class="button button-primary" href="{% url 'event_profile_create' profile.pk %}">Créer un événement avec ce profil</a><a class="button button-danger" href="{% url 'event_profile_delete' profile.pk %}">Supprimer le profil</a>{% endif %}<a class="button button-quiet" href="{% url 'event_profile_list' %}">Tous les profils</a></div></div></header>
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Organisation · Modèles d’événements</span><h1>{% if profile %}{{ profile.name }}{% else %}Créer un modèle d’événement{% endif %}</h1><p>Préparez les informations et les postes de votre modèle, puis réutilisez-le à chaque nouvelle date.</p></div><div class="button-row">{% if profile %}<a class="button button-primary" href="{% url 'event_profile_create' profile.pk %}">Créer un événement avec ce modèle</a><a class="button button-danger" href="{% url 'event_profile_delete' profile.pk %}">Supprimer le modèle</a>{% endif %}<a class="button button-quiet" href="{% url 'event_profile_list' %}">Tous les modèles</a></div></div></header>
 <div class="shell page-stack">
     {% if profile_error %}<div class="alert alert-error" role="alert">{{ profile_error }}</div>{% endif %}
-    <section class="panel narrow-content"><h2>Informations du profil</h2><form method="post" class="stack-form" novalidate>{% csrf_token %}{% include "partials/form_fields.html" with form=form %}<div class="form-actions"><a class="button button-quiet" href="{% url 'event_profile_list' %}">Annuler</a><button class="button button-primary" type="submit">{% if profile %}Enregistrer le profil{% else %}Créer le profil{% endif %}</button></div></form></section>
+    <section class="panel narrow-content"><h2>Informations du modèle</h2><form method="post" class="stack-form" novalidate>{% csrf_token %}{% if form.non_field_errors %}<div class="alert alert-error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+        {% for hidden in form.hidden_fields %}{{ hidden }}{% if hidden.errors %}<div class="alert alert-error" role="alert">{{ hidden.label }} : {{ hidden.errors }}</div>{% endif %}{% endfor %}
+        {% include "partials/form_field.html" with field=form.name %}
+        {% include "partials/form_field.html" with field=form.location %}
+        {% include "partials/form_field.html" with field=form.event_description %}
+        {% include "partials/form_field.html" with field=form.general_instructions %}
+        <details{% if form.description.errors %} open{% endif %}><summary>Note interne (facultative)</summary>{% include "partials/form_field.html" with field=form.description %}</details>
+        <fieldset><legend>Boissons des collations</legend>{% include "partials/form_field.html" with field=form.morning_hot_beverage_enabled %}{% include "partials/form_field.html" with field=form.afternoon_cold_beverage_enabled %}</fieldset><div class="form-actions"><a class="button button-quiet" href="{% url 'event_profile_list' %}">Annuler</a><button class="button button-primary" type="submit">{% if profile %}Enregistrer le modèle{% else %}Créer le modèle{% endif %}</button></div></form></section>
     {% if profile %}
-    <section><div class="panel-heading"><div><h2>Postes du profil</h2><p>Les jours sont comptés à partir de la date choisie lors de la création de l’événement.</p></div><a class="button button-primary" href="{% url 'event_profile_station_create' profile.pk %}">Ajouter un poste au profil</a></div>
+    <section><div class="panel-heading"><div><h2>Postes du modèle</h2><p>Les jours sont comptés à partir de la date choisie lors de la création de l’événement.</p></div><a class="button button-primary" href="{% url 'event_profile_station_create' profile.pk %}">Ajouter un poste au modèle</a></div>
         <div class="page-stack">
         {% for station in stations %}
             <article class="panel"><div class="panel-heading"><div><h3>{{ station.name }}</h3><div class="badge-row"><span class="badge badge-neutral">{% if station.config.category == 'official' %}Officiel{% else %}Bénévole{% endif %}</span>{% if not station.config.is_active %}<span class="badge badge-neutral">Inactif</span>{% endif %}</div></div><div class="button-row"><a class="button button-secondary button-small" href="{% url 'event_profile_station_update' profile.pk station.index %}">Modifier le poste et ses créneaux</a><a class="button button-quiet button-small danger-link" href="{% url 'event_profile_station_delete' profile.pk station.index %}">Supprimer le poste</a></div></div>
@@ -19,6 +26,6 @@
         {% empty %}<article class="panel"><h3>Ajoutez le premier poste</h3><p>Précisez son nom, ses conditions et ses créneaux pour préparer votre modèle d’événement.</p></article>{% endfor %}
         </div>
     </section>
-    {% else %}<section class="info-banner"><span aria-hidden="true">i</span><p>Enregistrez les informations du profil pour ajouter ensuite ses postes et leurs créneaux.</p></section>{% endif %}
+    {% else %}<section class="info-banner"><span aria-hidden="true">i</span><p>Enregistrez les informations du modèle pour ajouter ensuite ses postes et leurs créneaux.</p></section>{% endif %}
 </div>
 {% endblock %}

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Supprimer un poste du profil — AMELONE{% endblock %}
+{% block title %}Supprimer un poste du modèle — AMELONE{% endblock %}
 {% block content %}
-<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Profil d’événement · {{ profile.name }}</span><h1>Supprimer le poste</h1></div></div></header>
-<div class="shell narrow-content page-stack"><section class="panel"><h2>{{ station.name }}</h2><p>Confirmez la suppression de ce poste et de ses créneaux dans le profil « {{ profile.name }} ».</p><form method="post" class="stack-form">{% csrf_token %}{% include "partials/form_fields.html" with form=form %}<div class="form-actions"><a class="button button-quiet" href="{% url 'event_profile_update' profile.pk %}">Annuler</a><button class="button button-danger" type="submit">Supprimer le poste</button></div></form></section></div>
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Modèle d’événement · {{ profile.name }}</span><h1>Supprimer le poste</h1></div></div></header>
+<div class="shell narrow-content page-stack"><section class="panel"><h2>{{ station.name }}</h2><p>Confirmez la suppression de ce poste et de ses créneaux dans le modèle « {{ profile.name }} ».</p><form method="post" class="stack-form">{% csrf_token %}{% include "partials/form_fields.html" with form=form %}<div class="form-actions"><a class="button button-quiet" href="{% url 'event_profile_update' profile.pk %}">Annuler</a><button class="button button-danger" type="submit">Supprimer le poste</button></div></form></section></div>
 {% endblock %}

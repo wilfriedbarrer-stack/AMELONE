@@ -1,0 +1,35 @@
+{% load volunteer_extras %}
+{% if form.non_field_errors %}<div class="alert alert-error" role="alert"><strong>Vérifiez les informations suivantes.</strong>{{ form.non_field_errors }}</div>{% endif %}
+{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+{% if form.availability %}<section class="participation-section"><h2>Présence et poste</h2>
+{% include "partials/participation_field.html" with field=form.availability %}
+{% include "partials/participation_field.html" with field=form.preferred_station %}
+{% include "partials/participation_field.html" with field=form.station_slots %}
+</section>{% endif %}
+{% if form.menu %}
+<section class="participation-section"><h2>Restauration</h2>
+{% include "partials/participation_field.html" with field=form.no_meal %}
+{% include "partials/participation_field.html" with field=form.wants_meal %}
+<p id="meal-entitlement" class="help-text">{% if form.meal_availability == 'full_day' %}Un repas complet, avec les collations du matin et de l’après-midi au choix.{% else %}Une collation pour votre demi-journée.{% endif %}</p>
+<div id="meal-choices" class="participation-grid">
+<section id="meal-period-morning" class="meal-period"{% if form.meal_availability != 'full_day' %} hidden{% endif %}><h3>Matin</h3>
+{% include "partials/participation_field.html" with field=form.morning_snack %}
+{% include "partials/participation_field.html" with field=form.morning_beverage %}
+</section>
+<section id="meal-period-main" class="meal-period"><h3 id="meal-main-heading">{% if form.meal_availability == 'full_day' %}Midi{% elif form.meal_availability == 'morning' %}Matin{% else %}Après-midi{% endif %}</h3>
+{% include "partials/participation_field.html" with field=form.menu %}
+{% include "partials/participation_field.html" with field=form.beverage %}
+</section>
+<section id="meal-period-afternoon" class="meal-period"{% if form.meal_availability != 'full_day' %} hidden{% endif %}><h3>Après-midi</h3>
+{% include "partials/participation_field.html" with field=form.afternoon_snack %}
+{% include "partials/participation_field.html" with field=form.afternoon_beverage %}
+</section></div></section>
+<section class="participation-section meal-summary" aria-labelledby="meal-summary-heading"><h2 id="meal-summary-heading">Votre réservation</h2>
+<div id="meal-summary-lines">{% for item in form.preview_summary %}<div class="meal-summary-row"><span>{{ item.label }} : {{ item.name }}</span><span>{{ item.cents|euros }}</span></div>{% empty %}<p>Aucun choix de restauration pour le moment.</p>{% endfor %}</div>
+<p class="meal-summary-total"><strong>Montant de cette réservation</strong><strong id="meal-summary-total">{{ form.preview_total_cents|euros }}</strong></p>
+{% include "partials/official_meal_pricing_notice.html" %}
+{% include "partials/participation_field.html" with field=form.payment_method %}
+<p id="meal-payment-free" class="help-text"{% if form.preview_total_cents %} hidden{% endif %}>Aucun règlement pour cette réservation.</p>
+</section>
+{% endif %}
+{% if form.note %}<details class="participation-section"{% if form.note.value or form.note.errors %} open{% endif %}><summary>Remarque pour l’organisation (facultatif)</summary>{% include "partials/participation_field.html" with field=form.note %}</details>{% endif %}

@@ -25,13 +25,15 @@ class EventArchiveVisibilityTests(DataMixin, TestCase):
         self.assertIn(self.event, response.context["events"])
         self.assertTrue(response.context["show_archived"])
 
-    def test_administration_keeps_archived_events_out_of_active_cards(self):
+    def test_settings_links_to_event_list_without_duplicate_event_cards(self):
         self.archive_event()
         response = self.client.get(reverse("administration_dashboard"))
-        self.assertNotIn(self.event, response.context["events"])
+        self.assertContains(response, reverse("event_list"))
+        self.assertNotContains(response, self.event.name)
         response = self.client.get(reverse("administration_dashboard"), {"archives": "1"})
-        self.assertIn(self.event, response.context["events"])
-        self.assertTrue(response.context["show_archived"])
+        self.assertNotContains(response, self.event.name)
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.status, Event.Status.ARCHIVED)
 
     def test_archived_days_do_not_remain_in_upcoming_dashboard(self):
         self.archive_event()

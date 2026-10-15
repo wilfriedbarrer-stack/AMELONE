@@ -1,10 +1,11 @@
-"""Gestion des profils d'événement dans l'espace organisateur."""
+"""Gestion des modèles d'événement dans l'espace organisateur."""
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from .event_profiles import create_event_from_profile, save_event_profile
@@ -49,12 +50,12 @@ def event_profile_save(request, event_id):
                 description=form.cleaned_data["description"],
             )
         except IntegrityError:
-            form.add_error("name", "Un profil porte déjà ce nom. Choisissez un autre nom.")
+            form.add_error("name", "Un modèle porte déjà ce nom. Choisissez un autre nom.")
         except ValidationError as error:
             for message in _form_error_messages(error):
                 form.add_error(None, message)
         else:
-            messages.success(request, "Le profil réutilisable a été enregistré.")
+            messages.success(request, "Le modèle réutilisable a été enregistré.")
             return redirect("event_profile_list")
     return render(
         request,
@@ -69,6 +70,8 @@ def event_profile_save(request, event_id):
 @organizer_required
 def event_profile_create(request, profile_id):
     profile = get_object_or_404(EventProfile, pk=profile_id)
+    if request.method == "GET":
+        return redirect(f"{reverse('event_create')}?modele={profile.pk}")
     suggested_name = (
         profile.snapshot.get("event_name", profile.name)
         if isinstance(profile.snapshot, dict) else profile.name
@@ -109,10 +112,10 @@ def event_profile_create(request, profile_id):
 def _profile_stations(profile):
     snapshot = profile.snapshot
     if not isinstance(snapshot, dict) or snapshot.get("version") != 1:
-        raise ValidationError("Ce profil ne contient pas une configuration utilisable.")
+        raise ValidationError("Ce modèle ne contient pas une configuration utilisable.")
     stations = snapshot.get("stations", [])
     if not isinstance(stations, list) or any(not isinstance(station, dict) for station in stations):
-        raise ValidationError("Les postes enregistrés dans ce profil sont invalides.")
+        raise ValidationError("Les postes enregistrés dans ce modèle sont invalides.")
     return stations
 
 
@@ -120,15 +123,15 @@ def _profile_days(profile):
     snapshot = profile.snapshot
     days = snapshot.get("days") if isinstance(snapshot, dict) else None
     if not isinstance(days, list) or not days:
-        raise ValidationError("Ce profil ne contient aucune journée utilisable.")
+        raise ValidationError("Ce modèle ne contient aucune journée utilisable.")
     offsets = []
     for day in days:
         offset = day.get("offset") if isinstance(day, dict) else None
         if type(offset) is not int or offset < 0 or offset in offsets:
-            raise ValidationError("Les journées enregistrées dans ce profil sont invalides.")
+            raise ValidationError("Les journées enregistrées dans ce modèle sont invalides.")
         offsets.append(offset)
     if 0 not in offsets:
-        raise ValidationError("Le premier jour de l’événement est absent de ce profil.")
+        raise ValidationError("Le premier jour de l’événement est absent de ce modèle.")
     return sorted(offsets)
 
 
@@ -136,9 +139,9 @@ def _station_at(profile, station_index):
     try:
         stations = _profile_stations(profile)
     except ValidationError as error:
-        raise Http404("Ce poste est introuvable dans le profil.") from error
+        raise Http404("Ce poste est introuvable dans le modèle.") from error
     if type(station_index) is not int or not 0 <= station_index < len(stations):
-        raise Http404("Ce poste est introuvable dans le profil.")
+        raise Http404("Ce poste est introuvable dans le modèle.")
     return stations[station_index]
 
 
@@ -175,9 +178,9 @@ def event_profile_new(request):
         except ValidationError as error:
             _profile_form_errors(form, error)
         except IntegrityError:
-            form.add_error("name", "Un profil porte déjà ce nom. Choisissez un autre nom.")
+            form.add_error("name", "Un modèle porte déjà ce nom. Choisissez un autre nom.")
         else:
-            messages.success(request, "Le profil réutilisable a été créé. Vous pouvez ajouter ses postes.")
+            messages.success(request, "Le modèle réutilisable a été créé. Vous pouvez ajouter ses postes.")
             return redirect("event_profile_update", profile_id=profile.pk)
     return render(request, "volunteers/organizer/profiles/edit.html", {
         "form": form, "profile": None, "stations": [], "mode_create": True,
@@ -202,9 +205,9 @@ def event_profile_update(request, profile_id):
         except ValidationError as error:
             _profile_form_errors(form, error)
         except IntegrityError:
-            form.add_error("name", "Un profil porte déjà ce nom. Choisissez un autre nom.")
+            form.add_error("name", "Un modèle porte déjà ce nom. Choisissez un autre nom.")
         else:
-            messages.success(request, "Le profil réutilisable a été modifié.")
+            messages.success(request, "Le modèle réutilisable a été modifié.")
             return redirect("event_profile_update", profile_id=profile.pk)
     profile_error = ""
     try:
@@ -259,7 +262,7 @@ def _profile_station_edit(request, profile, station_index=None):
             except ValidationError as error:
                 _profile_form_errors(form, error)
             else:
-                messages.success(request, "Le poste et ses créneaux ont été enregistrés dans le profil.")
+                messages.success(request, "Le poste et ses créneaux ont été enregistrés dans le modèle.")
                 return redirect("event_profile_update", profile_id=profile.pk)
     return render(request, "volunteers/organizer/profiles/station_form.html", {
         "form": form, "formset": formset, "profile": profile, "station_index": station_index,
@@ -299,7 +302,7 @@ def event_profile_station_delete(request, profile_id, station_index):
         except ValidationError as error:
             _profile_form_errors(form, error)
         else:
-            messages.success(request, "Le poste a été supprimé du profil réutilisable.")
+            messages.success(request, "Le poste a été supprimé du modèle réutilisable.")
             return redirect("event_profile_update", profile_id=profile.pk)
     return render(request, "volunteers/organizer/profiles/station_confirm_delete.html", {
         "profile": profile, "station": station, "station_index": station_index, "form": form,

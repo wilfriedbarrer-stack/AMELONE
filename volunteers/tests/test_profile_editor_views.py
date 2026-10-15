@@ -142,7 +142,7 @@ class ProfileEditorViewsTests(DataMixin, TestCase):
         ):
             with self.subTest(url=url):
                 response = self.client.post(url, data)
-                self.assertContains(response, "La version de ce profil est manquante ou invalide.")
+                self.assertContains(response, "La version de ce modèle est manquante ou invalide.")
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.name, "Profil de concours")
         self.assertEqual(self.profile.snapshot, original)
@@ -154,7 +154,7 @@ class ProfileEditorViewsTests(DataMixin, TestCase):
         self.assertEqual(response.status_code, 302)
         for url, data in ((self.profile_url(), stale_metadata), (self.station_url(), stale_station)):
             with self.subTest(url=url):
-                self.assertContains(self.client.post(url, data), "Ce profil a été modifié")
+                self.assertContains(self.client.post(url, data), "Ce modèle a été modifié")
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.name, "Dernière édition")
         self.assertEqual(self.profile.snapshot["stations"][0]["name"], "Accueil")
@@ -230,7 +230,7 @@ class ProfileEditorViewsTests(DataMixin, TestCase):
 
     def test_duplicate_station_name_is_a_visible_form_error(self):
         response = self.client.post(self.station_url(), self.station_data(name="Buvette"))
-        self.assertContains(response, "Un poste porte déjà ce nom dans le profil.")
+        self.assertContains(response, "Un poste porte déjà ce nom dans le modèle.")
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.snapshot["stations"][0]["name"], "Accueil")
 
@@ -253,7 +253,7 @@ class ProfileEditorViewsTests(DataMixin, TestCase):
         url = reverse("event_profile_station_delete", args=[self.profile.pk, 0])
         token = self.profile.updated_at.isoformat()
         self.assertEqual(self.client.post(url, {"expected_updated_at": token}).status_code, 302)
-        self.assertContains(self.client.post(url, {"expected_updated_at": token}), "Ce profil a été modifié")
+        self.assertContains(self.client.post(url, {"expected_updated_at": token}), "Ce modèle a été modifié")
         self.profile.refresh_from_db()
         self.assertEqual([station["name"] for station in self.profile.snapshot["stations"]], ["Buvette"])
 
@@ -273,12 +273,12 @@ class ProfileEditorViewsTests(DataMixin, TestCase):
         self.assertTrue(response.context["formset"].non_form_errors())
         self.assertContains(self.client.post(self.profile_url(), self.metadata(
             expected_updated_at="pas-une-date",
-        )), "Ce profil a été modifié")
+        )), "Ce modèle a été modifié")
 
     def test_corrupt_profile_configuration_does_not_produce_server_error(self):
         self.profile.snapshot = []
         self.profile.save(update_fields=["snapshot", "updated_at"])
-        self.assertContains(self.client.get(self.profile_url()), "Ce profil ne contient pas une configuration utilisable.")
+        self.assertContains(self.client.get(self.profile_url()), "Ce modèle ne contient pas une configuration utilisable.")
         self.assertEqual(self.client.get(reverse("event_profile_station_create", args=[self.profile.pk])).status_code, 200)
         self.assertEqual(self.client.get(self.station_url()).status_code, 404)
 

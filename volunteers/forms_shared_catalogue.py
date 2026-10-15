@@ -2,14 +2,27 @@ from django import forms
 
 from .forms_catalogue import CatalogueConfirmForm
 from .forms_organizer import BeverageForm, MenuForm
+from .models import Beverage
 from .shared_catalogue import shared_option_version
+
+
+class SharedCatalogueFilterForm(forms.Form):
+    q = forms.CharField(label="Rechercher", required=False, max_length=200)
+    status = forms.ChoiceField(
+        label="État", required=False, initial="active",
+        choices=(("active", "Actifs"), ("inactive", "Inactifs"), ("all", "Tous")),
+    )
+    temperature = forms.ChoiceField(
+        label="Boissons", required=False,
+        choices=(("", "Toutes les températures"), *Beverage.Temperature.choices),
+    )
 
 
 class SharedCatalogueFormMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.instance.event_day = None
-        self.fields["surcharge_euros"].label = "Prix (€)"
+        self.fields["surcharge_euros"].label = "Prix catalogue (€)"
         self.fields["surcharge_euros"].help_text = "Les nouveaux choix utiliseront ce prix. Les montants des réservations existantes sont conservés."
         if not self.instance._state.adding:
             self.fields["version"].required = True

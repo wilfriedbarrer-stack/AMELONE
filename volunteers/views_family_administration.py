@@ -88,20 +88,8 @@ def administrator_family_detail(request, family_id):
     members = list(family.members.select_related("user"))
     for member in members:
         member.current_age = member.age_on()
-        if member.pk == selected_id:
-            member.official_form = bound_form
-        else:
-            member.official_form = MemberOfficialForm(initial={
-                "member_id": member.pk,
-                "is_competition_official": member.is_competition_official,
-            })
-        # The checkbox and its help text need a distinct accessible identifier per row.
-        member.official_form.fields["is_competition_official"].widget.attrs.update({
-            "id": f"official-{member.pk}",
-            "aria-describedby": f"official-help-{member.pk}",
-        })
     return render(request, "administration/family_detail.html", {
-        "family": family, "members": members,
+        "family": family, "members": members, "legacy_official_form": bound_form,
     })
 
 
@@ -145,7 +133,7 @@ def administrator_member_update(request, family_id, member_id):
                         account = users[member.user_id]
                         account.is_competition_official = member.is_competition_official
                         account.save(update_fields=["is_competition_official"])
-                    messages.success(request, f"Le profil de {member.full_name} a été enregistré.")
+                    messages.success(request, f"La fiche de {member.full_name} a été enregistrée.")
                     return redirect("administrator_family_detail", family_id=family.pk)
         except ValidationError as error:
             _report_validation_error(form, error)

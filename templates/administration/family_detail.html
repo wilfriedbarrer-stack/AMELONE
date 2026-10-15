@@ -1,50 +1,34 @@
 {% extends "base.html" %}
 {% block title %}Famille {{ family.display_name }} — AMELONE{% endblock %}
 {% block content %}
-<header class="page-header">
-    <div class="shell header-copy">
-        <div>
-            <span class="eyebrow">Administration · Membres de la famille</span>
-            <h1>{{ family.display_name }}</h1>
-            <p>Compte responsable : {{ family.account.get_full_name|default:family.account.email }} · {{ family.account.email }}</p>
-        </div>
-        <div class="button-row">
-            <a class="button button-primary" href="{% url 'administrator_family_update' family.pk %}">Modifier les informations de la famille</a>
-            <a class="button button-secondary" href="{% url 'profile_update' family.account.pk %}">Profil et droits du compte responsable</a>
-        </div>
-    </div>
-</header>
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Familles et membres</span><h1>{{ family.display_name }}</h1><p>Une seule fiche pour le responsable, les membres et les accès du compte.</p></div><a class="button button-secondary" href="{% url 'administrator_families' %}">Toutes les familles</a></div></header>
 <div class="shell page-stack">
-    <div class="info-banner"><span aria-hidden="true">i</span><p>La fonction s’attribue à chaque personne, y compris au responsable de la famille. Elle permet de choisir un poste d’officiel sans donner de droits de gestion. Licence et formation à jour nécessaires.</p></div>
-    {% for member in members %}
-    <section class="panel" aria-labelledby="member-name-{{ member.pk }}">
-        <div class="panel-heading">
-            <div>
-                <h2 id="member-name-{{ member.pk }}">{{ member.full_name }}</h2>
-                <p>Né(e) le {{ member.birth_date|date:"d/m/Y" }} · {{ member.current_age }} ans · Informations privées</p>
-                {% if member.user_id %}<p>Profil personnel du compte responsable : {{ member.user.email }}</p>{% endif %}
-            </div>
-            <div class="button-row">
-                {% if member.is_archived %}<span class="badge badge-neutral">Archivé</span>{% else %}<span class="badge badge-success">Actif</span>{% endif %}
-                {% if member.is_competition_official %}<span class="badge badge-success">Officiel de compétition</span>{% endif %}
-                <a class="button button-secondary button-small" href="{% url 'administrator_member_update' family.pk member.pk %}">Modifier le profil</a>
-                {% if member.user_id %}<a class="button button-quiet button-small" href="{% url 'profile_update' member.user_id %}">Modifier les droits du compte</a>{% endif %}
-            </div>
-        </div>
-        <form method="post" class="stack-form">
-            {% csrf_token %}
-            <input type="hidden" name="member_id" value="{{ member.pk }}">
-            {% if member.official_form.non_field_errors %}<div class="alert alert-error" role="alert">{{ member.official_form.non_field_errors }}</div>{% endif %}
-            <div class="field field-checkbox">
-                {{ member.official_form.is_competition_official }}
-                <label for="official-{{ member.pk }}">Officiel de compétition</label>
-                <p class="help-text" id="official-help-{{ member.pk }}">Licence et formation à jour nécessaires.</p>
-                {% for error in member.official_form.is_competition_official.errors %}<p class="field-error" role="alert">{{ error }}</p>{% endfor %}
-            </div>
-            <div class="form-actions"><button class="button button-primary" type="submit">Enregistrer la fonction de {{ member.first_name }}</button></div>
-        </form>
+    <nav class="section-tabs" aria-label="Sections de la fiche famille"><a href="#responsable">Responsable</a><a href="#membres">Membres</a><a href="#droits">Droits du compte</a></nav>
+    {% if legacy_official_form.errors %}<div class="alert alert-error" role="alert">{{ legacy_official_form.errors }}<p>Ouvrez la fiche du membre pour modifier sa fonction.</p></div>{% endif %}
+    <section class="panel" id="responsable" aria-labelledby="responsable-heading">
+        <div class="panel-heading"><div><h2 id="responsable-heading">Responsable</h2><p>Les coordonnées du responsable sont privées et se modifient ici.</p></div><a class="button button-primary" href="{% url 'administrator_family_update' family.pk %}">Modifier les coordonnées</a></div>
+        <p><strong>{{ family.account.get_full_name|default:"Nom non renseigné" }}</strong></p>
+        <p class="contact-value">{{ family.account.email }}</p>
+        <p>Téléphone : {{ family.account.phone|default:"Non renseigné" }}</p>
     </section>
-    {% empty %}<section class="panel"><h2>Aucun membre enregistré</h2><p>Le responsable doit d’abord ajouter les personnes de sa famille ou compléter son profil personnel.</p></section>{% endfor %}
-    <a href="{% url 'administrator_families' %}">Retour aux familles</a>
+    <section class="panel" id="membres" aria-labelledby="membres-heading">
+        <div class="panel-heading"><div><h2 id="membres-heading">Membres</h2><p>La fonction d’officiel s’attribue sur chaque fiche membre. Licence et formation à jour nécessaires.</p></div></div>
+        <div class="page-stack">
+        {% for member in members %}
+            <article class="section-card" aria-labelledby="member-name-{{ member.pk }}">
+                <div class="panel-heading">
+                    <div><h3 id="member-name-{{ member.pk }}">{{ member.full_name }}</h3><p>Né(e) le {{ member.birth_date|date:"d/m/Y" }} · {{ member.current_age }} ans · Informations privées</p>{% if member.user_id %}<p>Ce membre est lié au compte responsable.</p>{% endif %}</div>
+                    <div class="button-row">{% if member.is_archived %}<span class="badge badge-neutral">Archivé</span>{% else %}<span class="badge badge-success">Actif</span>{% endif %}{% if member.is_competition_official %}<span class="badge badge-success">Officiel de compétition</span>{% else %}<span class="badge badge-neutral">Bénévole</span>{% endif %}</div>
+                </div>
+                <a class="button button-secondary button-small" href="{% url 'administrator_member_update' family.pk member.pk %}">Modifier la fiche de {{ member.first_name }}</a>
+            </article>
+        {% empty %}<p>Aucun membre enregistré. Le responsable peut ajouter les personnes de sa famille depuis son espace.</p>{% endfor %}
+        </div>
+    </section>
+    <section class="panel" id="droits" aria-labelledby="droits-heading">
+        <div class="panel-heading"><div><h2 id="droits-heading">Droits du compte</h2><p>Ces droits donnent accès aux outils de gestion. Ils sont distincts de l’identité et de la fonction des membres.</p></div><a class="button button-secondary" href="{% url 'profile_update' family.account.pk %}">Modifier les droits</a></div>
+        <p><strong>{% if family.account.is_superuser %}Administrateur{% elif family.account.is_organizer or family.account.is_staff %}Organisateur{% else %}Famille{% endif %}</strong> · {{ family.account.is_active|yesno:"Compte actif,Compte désactivé" }}</p>
+        <p>Un administrateur peut aussi être officiel de compétition : attribuez cette fonction à sa fiche membre.</p>
+    </section>
 </div>
 {% endblock %}

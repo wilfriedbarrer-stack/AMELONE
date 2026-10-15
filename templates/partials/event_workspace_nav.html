@@ -1,0 +1,21 @@
+{% if event %}
+<nav class="event-workspace-nav" aria-label="Gestion de l’événement">
+  <div class="event-workspace-tabs">
+    <a class="event-workspace-tab" href="{% url 'registration_list' event.pk %}"{% if event_section == 'participants' %} aria-current="page"{% endif %}>Participants</a>
+    <a class="event-workspace-tab" href="{% url 'event_detail' event.pk %}#postes"{% if event_section == 'stations' %} aria-current="page"{% endif %}>Postes</a>
+    <a class="event-workspace-tab" href="{% url 'recap_meals' event.pk %}"{% if event_section == 'catering' %} aria-current="page"{% endif %}>Restauration</a>
+    <a class="event-workspace-tab" href="{% url 'payments' event.pk %}"{% if event_section == 'payments' %} aria-current="page"{% endif %}>Paiements</a>
+  </div>
+  <details class="event-workspace-actions">
+    <summary>Autres actions</summary>
+    <div class="event-workspace-actions-list">
+      <a href="{% url 'event_update' event.pk %}">Modifier les informations</a>
+      <a href="{% url 'event_emails' event.pk %}">Messages aux participants</a>
+      <a href="{% url 'event_duplicate' event.pk %}">Dupliquer l’événement</a>
+      <a href="{% url 'event_profile_save' event.pk %}">Enregistrer comme modèle</a>
+      {% if event.status == 'published' %}<a href="{% url 'public_planning' %}?event={{ event.pk }}">Voir le planning public</a>{% endif %}
+      <a class="danger-link" href="{% url 'event_delete' event.pk %}">Supprimer ou archiver</a>
+    </div>
+  </details>
+</nav>
+{% endif %}

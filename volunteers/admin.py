@@ -1,13 +1,17 @@
-from django.contrib import admin
+from contextlib import ExitStack
+
+from django.contrib import admin, messages
 from django.contrib.auth.admin import GroupAdmin as DjangoGroupAdmin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from django.contrib.auth.models import Group
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import format_html
 
+from .forms_scheduling import ScheduleValidatedInlineFormSet
 from .models import (
     Assignment,
     AssignmentCommunication,
@@ -28,6 +32,7 @@ from .models import (
     StationSlot,
     User,
 )
+from .scheduling import lock_schedule_members, station_schedule_context, validate_station_schedule
 
 
 class ReadOnlyTimestampsMixin:
@@ -353,6 +358,7 @@ class EventDayAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
 
 class StationSlotInline(admin.TabularInline):
     model = StationSlot
+    formset = ScheduleValidatedInlineFormSet
     extra = 0
     fields = ("event_day", "period", "capacity", "start_time", "end_time")
     autocomplete_fields = ("event_day",)
@@ -366,6 +372,75 @@ class StationAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
     search_fields = ("name", "description", "instructions", "event__name")
     autocomplete_fields = ("event",)
     inlines = (StationSlotInline,)
+
+    def _changeform_view(self, request, object_id, form_url, extra_context):
+        # Django Admin wraps this method in a transaction. Lock participants
+        # before Station.save takes Event/Day locks, including inline edits.
+        with ExitStack() as stack:
+            request._station_schedule_stack = stack
+            request._station_schedule_formsets = []
+            request._station_schedule_member_ids = set()
+            try:
+                if request.method == "POST":
+                    # Admin's later LogEntry insert references this account.
+                    # Take its compatible audit lock before participant locks.
+                    User.objects.select_for_update(of=("self",), no_key=True).get(pk=request.user.pk)
+                    station = self.get_object(request, object_id) if object_id else None
+                    allowed = (
+                        self.has_change_permission(request, station)
+                        if station else self.has_add_permission(request)
+                    )
+                    if allowed:
+                        slots = list(StationSlot.objects.filter(station=station)) if station else []
+                        member_ids = lock_schedule_members(slots)
+                        event_ids = {station.event_id} if station else set()
+                        posted_event = request.POST.get("event")
+                        if posted_event:
+                            try:
+                                event_ids.update(Event.objects.filter(pk=posted_event).values_list("pk", flat=True))
+                            except (ValidationError, ValueError):
+                                pass  # The regular form displays the invalid event.
+                        list(Event.objects.select_for_update(of=("self",)).filter(
+                            pk__in=event_ids,
+                        ).order_by("pk"))
+                        day_ids = set(EventDay.objects.filter(event_id__in=event_ids).values_list("pk", flat=True))
+                        day_ids.update(slot.event_day_id for slot in slots)
+                        list(EventDay.objects.select_for_update(of=("self",)).filter(
+                            pk__in=day_ids,
+                        ).order_by("pk"))
+                        list(StationSlot.objects.select_for_update(of=("self",)).filter(
+                            pk__in={slot.pk for slot in slots},
+                        ).order_by("pk"))
+                        try:
+                            validate_station_schedule(slots, locked_member_ids=member_ids)
+                        except ValidationError as error:
+                            messages.warning(request, " ".join(error.messages))
+                            return HttpResponseRedirect(request.path)
+                        request._station_schedule_member_ids = member_ids
+                return super()._changeform_view(request, object_id, form_url, extra_context)
+            finally:
+                for name in (
+                    "_station_schedule_stack", "_station_schedule_formsets", "_station_schedule_member_ids",
+                ):
+                    request.__dict__.pop(name, None)
+
+    def _create_formsets(self, request, obj, change):
+        formsets, inline_instances = super()._create_formsets(request, obj, change)
+        request._station_schedule_formsets = formsets
+        return formsets, inline_instances
+
+    def save_model(self, request, obj, form, change):
+        slots = [
+            item.instance
+            for formset in request._station_schedule_formsets
+            if formset.model is StationSlot
+            for item in formset.forms
+            if item.cleaned_data and not item.cleaned_data.get("DELETE")
+        ]
+        request._station_schedule_stack.enter_context(station_schedule_context(
+            slots, locked_member_ids=request._station_schedule_member_ids,
+        ))
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(StationSlot)
@@ -382,6 +457,34 @@ class StationSlotAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
     list_filter = ("period", "event_day__event", "event_day__date")
     search_fields = ("station__name", "station__event__name")
     autocomplete_fields = ("station", "event_day")
+
+    def _changeform_view(self, request, object_id, form_url, extra_context):
+        with ExitStack() as stack:
+            if request.method == "POST":
+                User.objects.select_for_update(of=("self",), no_key=True).get(pk=request.user.pk)
+                slot = self.get_object(request, object_id) if object_id else None
+                if slot and self.has_change_permission(request, slot):
+                    member_ids = lock_schedule_members([slot])
+                    day_ids = {slot.event_day_id}
+                    posted_day = request.POST.get("event_day")
+                    if posted_day:
+                        try:
+                            day_ids.update(EventDay.objects.filter(pk=posted_day).values_list("pk", flat=True))
+                        except (ValidationError, ValueError):
+                            pass
+                    list(EventDay.objects.select_for_update(of=("self",)).filter(
+                        pk__in=day_ids,
+                    ).order_by("pk"))
+                    slot = StationSlot.objects.select_for_update(of=("self",)).get(pk=slot.pk)
+                    if slot.event_day_id not in day_ids:
+                        messages.warning(request, "Le créneau a été déplacé. Actualisez la page et réessayez.")
+                        return HttpResponseRedirect(request.path)
+                    try:
+                        stack.enter_context(station_schedule_context([slot], locked_member_ids=member_ids))
+                    except ValidationError as error:
+                        messages.warning(request, " ".join(error.messages))
+                        return HttpResponseRedirect(request.path)
+            return super()._changeform_view(request, object_id, form_url, extra_context)
 
     @admin.display(description="Affectations actives")
     def active_assignment_count(self, obj):

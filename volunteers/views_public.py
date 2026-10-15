@@ -195,6 +195,7 @@ def public_planning(request, event_id=None, day_id=None):
             "events": events,
             "event": event,
             "days": days,
+            "show_day_filter": days.count() > 1,
             "selected_day": selected_day,
             "rows": rows,
             "planning_scope": "family" if family_scope_active else "all",

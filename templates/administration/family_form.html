@@ -1,15 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Modifier la famille {{ family.display_name }} — AMELONE{% endblock %}
+{% block title %}Responsable de la famille {{ family.display_name }} — AMELONE{% endblock %}
 {% block content %}
-<header class="page-header">
-    <div class="shell header-copy">
-        <div><span class="eyebrow">Administration · Informations de la famille</span><h1>Modifier les informations de la famille</h1><p>{{ family.display_name }} · {{ family.account.email }}</p></div>
-        <a class="button button-secondary" href="{% url 'profile_update' family.account.pk %}">Modifier les droits du compte responsable</a>
-    </div>
-</header>
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Famille {{ family.display_name }} · Responsable</span><h1>Coordonnées du responsable</h1><p>Le nom de la famille et les coordonnées utilisées pour la contacter.</p></div></div></header>
 <div class="shell narrow-content page-stack">
-    <div class="info-banner"><span aria-hidden="true">i</span><div><strong>Coordonnées privées</strong><p>Ces informations concernent la famille et son compte responsable. Pour modifier l’identité ou la fonction d’officiel d’un membre, ouvrez son profil depuis la liste des membres.</p></div></div>
-    <section class="panel"><form method="post" class="stack-form" novalidate>{% csrf_token %}{% include "partials/form_fields.html" %}<div class="form-actions"><a class="button button-quiet" href="{% url 'administrator_family_detail' family.pk %}">Annuler</a><button class="button button-primary" type="submit">Enregistrer les informations</button></div></form></section>
-    <a href="{% url 'administrator_family_detail' family.pk %}">Retour aux membres de la famille</a>
+    <div class="info-banner"><span aria-hidden="true">i</span><p>Pour modifier l’identité ou la fonction d’officiel d’une personne, ouvrez sa fiche dans la section Membres de la famille.</p></div>
+    <section class="panel"><form method="post" class="stack-form" novalidate>{% csrf_token %}{% include "partials/form_fields.html" %}<div class="form-actions"><a class="button button-quiet" href="{% url 'administrator_family_detail' family.pk %}#responsable">Annuler</a><button class="button button-primary" type="submit">Enregistrer les coordonnées</button></div></form></section>
+    <a href="{% url 'administrator_family_detail' family.pk %}#responsable">Retour à la fiche famille</a>
 </div>
 {% endblock %}

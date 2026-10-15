@@ -10,6 +10,7 @@
   </div>
 </header>
 <div class="shell page-stack ticket-workspace">
+  <div class="no-print">{% include "partials/event_workspace_nav.html" with event=event event_section='catering' %}<nav class="button-row" aria-label="Vues de la restauration"><a class="button button-secondary" href="{% url 'recap_meals' event.pk %}">Participants</a><a class="button button-secondary" href="{% url 'recap_meals' event.pk %}?view=quantities">Quantités à préparer</a><a class="button button-primary" href="{% url 'meal_tickets' event.pk %}" aria-current="page">Tickets · 6 par A4</a></nav></div>
   <form method="get" class="filter-bar no-print" aria-label="Filtrer les tickets">
     {% include "partials/form_fields.html" with form=form %}
     <button class="button button-secondary" type="submit">Afficher les tickets</button>

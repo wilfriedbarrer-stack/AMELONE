@@ -21,11 +21,11 @@ class EventProfileSelectionTests(DataMixin, TestCase):
         data.update(changes)
         return data
 
-    def test_creation_page_offers_profile_selection_alongside_blank_event(self):
+    def test_creation_page_offers_model_and_blank_choice_in_one_editor(self):
         response = self.client.get(self.url)
-        self.assertContains(response, 'name="profile-profile"')
+        self.assertContains(response, 'name="profile"')
         self.assertContains(response, self.profile.name)
-        self.assertContains(response, 'name="profile-event_date"')
+        self.assertContains(response, 'name="event_date"')
         self.assertContains(response, 'name="registration_opens_at"')
         self.assertIsNone(response.context["event"])
 

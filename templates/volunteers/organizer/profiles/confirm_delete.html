@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Supprimer le profil {{ profile.name }} — AMELONE{% endblock %}
+{% block title %}Supprimer le modèle {{ profile.name }} — AMELONE{% endblock %}
 {% block content %}
-<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Organisation · Profil d’événement</span><h1>Supprimer le profil d’événement</h1><p>{{ profile.name }}</p></div></div></header>
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Organisation · Modèle d’événement</span><h1>Supprimer le modèle d’événement</h1><p>{{ profile.name }}</p></div></div></header>
 <div class="shell narrow-content page-stack">
-    <section class="alert alert-warning"><div><strong>Cette suppression est définitive.</strong><p>Le profil et sa configuration seront supprimés. Les événements déjà créés à partir de ce profil seront conservés.</p></div></section>
-    <section class="panel"><h2>{{ profile.name }}</h2>{% if profile.description %}<p>{{ profile.description|linebreaksbr }}</p>{% endif %}<dl class="detail-grid"><div><dt>Postes du profil</dt><dd>{{ station_count }}</dd></div><div><dt>Créneaux du profil</dt><dd>{{ slot_count }}</dd></div></dl></section>
-    <section class="panel"><form method="post" class="stack-form" novalidate>{% csrf_token %}{% include "partials/form_fields.html" with form=form %}<div class="form-actions"><a class="button button-quiet" href="{% url 'event_profile_update' profile.pk %}">Annuler</a><button class="button button-danger" type="submit">Supprimer définitivement le profil</button></div></form></section>
+    <section class="alert alert-warning"><div><strong>Cette suppression est définitive.</strong><p>Le modèle et sa configuration seront supprimés. Les événements déjà créés à partir de ce modèle seront conservés.</p></div></section>
+    <section class="panel"><h2>{{ profile.name }}</h2>{% if profile.description %}<p>{{ profile.description|linebreaksbr }}</p>{% endif %}<dl class="detail-grid"><div><dt>Postes du modèle</dt><dd>{{ station_count }}</dd></div><div><dt>Créneaux du modèle</dt><dd>{{ slot_count }}</dd></div></dl></section>
+    <section class="panel"><form method="post" class="stack-form" novalidate>{% csrf_token %}{% include "partials/form_fields.html" with form=form %}<div class="form-actions"><a class="button button-quiet" href="{% url 'event_profile_update' profile.pk %}">Annuler</a><button class="button button-danger" type="submit">Supprimer définitivement le modèle</button></div></form></section>
 </div>
 {% endblock %}

@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.core import signing
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
+from django.db.models import Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -17,6 +18,7 @@ from .catalogue_import import (
 )
 from .forms_catalogue import CatalogueConfirmForm, CatalogueUploadForm
 from .models import Assignment, Event, EventDay, Registration
+from .services import family_event_balance
 from .views_organizer import _beverage_preparation_choices, organizer_required
 
 PREVIEW_SESSION_KEY = "catalogue_import_preview"
@@ -233,6 +235,7 @@ def _meal_rows(event):
     rows = []
     quantities = Counter()
     beverage_quantities = Counter()
+    family_balances = {}
     for registration in _event_registrations(event):
         order = getattr(registration, "meal_order", None)
         has_meal = bool(order and order.wants_meal)
@@ -251,11 +254,16 @@ def _meal_rows(event):
             "Officiel — sans supplément" if has_meal and order.official_exemption_applied
             else order.get_payment_method_display() if has_meal else "—"
         )
+        family = registration.member.family
+        if family.pk not in family_balances:
+            family_balances[family.pk] = family_event_balance(family=family, event=event)
+        balance = family_balances[family.pk]
         rows.append({
             "registration": registration,
             "order": order,
             "formula": formula,
             "choice": choice,
+            "has_meal": has_meal,
             "menu": menu.name if menu else "—",
             "beverage": beverage.name if beverage else "—",
             "morning_snack_name": morning_snack.name if morning_snack else "—",
@@ -264,6 +272,8 @@ def _meal_rows(event):
             "afternoon_beverage_name": afternoon_beverage.name if afternoon_beverage else "—",
             "payment": payment,
             "surcharge_cents": order.total_surcharge_cents if has_meal else 0,
+            "family_remaining_cents": balance["amount_remaining_cents"],
+            "family_settled": balance["amount_remaining_cents"] == 0,
         })
         if menu:
             quantities[(registration.event_day.date, menu.get_meal_type_display(), menu.name)] += 1
@@ -279,10 +289,20 @@ def _meal_rows(event):
 
 @organizer_required
 def recap_meals(request, event_id):
-    event = get_object_or_404(Event, pk=event_id)
+    event = get_object_or_404(Event.objects.prefetch_related("days"), pk=event_id)
+    selected_view = request.GET.get("view", "participants")
+    if selected_view not in ("participants", "quantities"):
+        selected_view = "participants"
+    days = list(event.days.all())
+    exception_days = EventDay.objects.filter(event=event).filter(
+        Q(menus__isnull=False) | Q(beverages__isnull=False)
+    ).prefetch_related("menus", "beverages").distinct().order_by("date")
     rows, quantities, beverage_quantities = _meal_rows(event)
     return render(request, "organizer/recap_meals.html", {
         "event": event,
+        "selected_view": selected_view,
+        "single_day": days[0] if len(days) == 1 else None,
+        "exception_days": exception_days,
         "rows": rows,
         "participant_count": len(rows),
         "ordered_count": sum(row["choice"] == "Réservé" for row in rows),

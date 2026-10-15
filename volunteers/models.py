@@ -572,6 +572,42 @@ class StationSlot(UUIDTimeStampedModel):
         if errors:
             raise ValidationError(errors)
 
+        if not getattr(self, "_defer_schedule_validation", False):
+            from .scheduling import validate_station_schedule
+
+            validate_station_schedule([self])
+
+    @transaction.atomic
+    def save(self, *args, **kwargs):
+        from .scheduling import (
+            current_station_schedule,
+            lock_schedule_members,
+            validate_station_schedule,
+        )
+
+        previous = StationSlot.objects.filter(pk=self.pk).first()
+        context = current_station_schedule(self)
+        member_ids = context["member_ids"] if context else lock_schedule_members([self])
+        day_ids = {self.event_day_id}
+        if previous:
+            day_ids.add(previous.event_day_id)
+        list(EventDay.objects.select_for_update(of=("self",)).filter(
+            pk__in=day_ids,
+        ).order_by("pk"))
+        locked = StationSlot.objects.select_for_update(of=("self",)).filter(pk=self.pk).first()
+        if locked and locked.event_day_id not in day_ids:
+            raise ValidationError("Le créneau a été déplacé. Actualisez la page et réessayez.")
+        update_fields = kwargs.get("update_fields")
+        if locked and update_fields is not None:
+            for field in ("station", "event_day", "period", "capacity", "start_time", "end_time"):
+                if field not in update_fields and f"{field}_id" not in update_fields:
+                    attribute = f"{field}_id" if field in ("station", "event_day") else field
+                    setattr(self, attribute, getattr(locked, attribute))
+        self.clean_fields()
+        validate_station_schedule([self], locked_member_ids=member_ids)
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     @property
     def remaining_capacity(self):
         occupied = self.assignments.filter(
@@ -580,7 +616,7 @@ class StationSlot(UUIDTimeStampedModel):
         return max(self.capacity - occupied, 0)
 
     def overlaps(self, other: "StationSlot") -> bool:
-        if self.event_day_id != other.event_day_id:
+        if self.event_day_id != other.event_day_id and self.event_day.date != other.event_day.date:
             return False
         # Une affectation à la journée mobilise la personne sur les deux
         # demi-journées, même si les horaires indicatifs ne se chevauchent pas.
@@ -809,17 +845,14 @@ class Assignment(UUIDTimeStampedModel):
             if not registration.covers_period(slot.period):
                 errors["station_slot"] = _("Ce créneau est hors de la disponibilité déclarée.")
 
-            active_statuses = (self.Status.DRAFT, self.Status.CONFIRMED)
-            others = Assignment.objects.filter(
-                registration=registration, status__in=active_statuses
-            ).exclude(pk=self.pk)
-            if others.filter(period=slot.period).exists():
-                errors["station_slot"] = _("Cette personne est déjà affectée sur cette période.")
-            for other in others.select_related("station_slot"):
-                if slot.overlaps(other.station_slot):
-                    errors["station_slot"] = _("Ce créneau chevauche une autre affectation.")
-                    break
+            from .scheduling import validate_assignment_schedule
 
+            try:
+                validate_assignment_schedule(self)
+            except ValidationError as error:
+                errors["station_slot"] = error.messages
+
+            active_statuses = (self.Status.DRAFT, self.Status.CONFIRMED)
             occupied = Assignment.objects.filter(
                 station_slot=slot, status__in=active_statuses
             ).exclude(pk=self.pk).count()

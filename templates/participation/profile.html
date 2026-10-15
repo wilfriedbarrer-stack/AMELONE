@@ -1,9 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Mon profil de participant — AMELONE{% endblock %}
 {% block content %}
-<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Ma participation</span><h1>Mon profil de participant</h1><p>Ces informations servent à vous inscrire personnellement aux événements.</p></div></div></header>
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Ma participation</span><h1>Mon profil de participant</h1><p>Utilisez votre fiche de membre existante ou créez votre profil pour participer.</p></div></div></header>
 <div class="shell narrow-content page-stack"><section class="panel">
-<form method="post" class="stack-form" novalidate>{% csrf_token %}{% include "partials/form_fields.html" %}
+<form method="post" class="stack-form" novalidate>{% csrf_token %}
+{% if form.non_field_errors %}<div class="alert alert-error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+{% if form.has_existing_member_choices %}{% include "partials/participation_field.html" with field=form.existing_member %}<p id="existing-participant-help" class="help-text" hidden>Les informations de ce membre seront utilisées pour votre participation.</p>{% endif %}
+<div id="participant-identity" class="stack-form">
+{% include "partials/participation_field.html" with field=form.first_name %}
+{% include "partials/participation_field.html" with field=form.last_name %}
+{% include "partials/participation_field.html" with field=form.birth_date %}
+</div>
 <div class="form-actions"><a class="button button-quiet" href="{% url 'personal_participation' %}">Annuler</a><button class="button button-primary" type="submit">Enregistrer mon profil</button></div>
 </form></section></div>
+<script>(() => { const selected = document.getElementById('id_existing_member'), identity = document.getElementById('participant-identity'), help = document.getElementById('existing-participant-help'); if (!selected) return; function update() { const existing = !!selected.value; identity.hidden = existing; identity.style.display = existing ? 'none' : ''; if (help) help.hidden = !existing; for (const input of identity.querySelectorAll('input')) input.disabled = existing; } selected.addEventListener('change', update); update(); })();</script>
 {% endblock %}

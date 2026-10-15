@@ -39,6 +39,8 @@ class MealTicketFilterForm(OrganizerFormMixin, forms.Form):
     def __init__(self, *args, event, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["day"].queryset = event.days.order_by("date")
+        if self.fields["day"].queryset.count() == 1:
+            self.fields["day"].widget = forms.HiddenInput()
         self.fields["member"].queryset = Member.objects.filter(
             registrations__event_day__event=event,
             registrations__status=Registration.Status.ACTIVE,

@@ -18,6 +18,12 @@ class CatalogueUploadForm(forms.Form):
         self.fields["event_day"].queryset = event.days.order_by("date")
         if event.days.count() == 1:
             self.fields["event_day"].initial = event.days.first()
+            self.fields["event_day"].widget = forms.HiddenInput()
+            # Ignore a missing field from older clients, while still validating
+            # any explicit value against the event-scoped queryset.
+            if self.is_bound and not self.data.get("event_day"):
+                self.data = self.data.copy()
+                self.data["event_day"] = str(self.fields["event_day"].initial.pk)
 
 
 class CatalogueConfirmForm(forms.Form):

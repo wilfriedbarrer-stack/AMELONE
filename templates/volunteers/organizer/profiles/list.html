@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Profils d’événements — AMELONE{% endblock %}
+{% block title %}Modèles d’événements — AMELONE{% endblock %}
 {% block content %}
-<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Organisation</span><h1>Profils d’événements</h1><p>Préparez vos modèles et leurs postes pour les réutiliser à chaque compétition.</p></div><div class="button-row"><a class="button button-primary" href="{% url 'event_profile_new' %}">Créer un profil d’événement</a><a class="button button-quiet" href="{% url 'event_list' %}">Événements</a></div></div></header>
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Organisation</span><h1>Modèles d’événements</h1><p>Préparez vos modèles et leurs postes pour les réutiliser à chaque compétition.</p></div><div class="button-row"><a class="button button-primary" href="{% url 'event_profile_new' %}">Créer un modèle d’événement</a><a class="button button-quiet" href="{% url 'event_list' %}">Événements</a></div></div></header>
 <div class="shell page-stack">
-    <section class="info-banner"><span aria-hidden="true">i</span><p>Créez un profil, ajoutez ses postes et leurs créneaux, puis choisissez-le lors de la création d’un événement. Vous pouvez aussi enregistrer un événement déjà configuré comme profil.</p></section>
-    <section class="panel table-panel"><div class="responsive-table"><table>
-        <thead><tr><th>Profil</th><th>Description</th><th>Mis à jour</th><th>Actions</th></tr></thead>
-        <tbody>{% for profile in profiles %}<tr><td data-label="Profil"><strong>{{ profile.name }}</strong></td><td data-label="Description">{{ profile.description|default:"—" }}</td><td data-label="Mis à jour">{{ profile.updated_at|date:"d/m/Y" }}</td><td class="table-actions"><a href="{% url 'event_profile_update' profile.pk %}">Modifier le profil et ses postes</a><a href="{% url 'event_profile_create' profile.pk %}">Créer un événement</a><a class="danger-link" href="{% url 'event_profile_delete' profile.pk %}">Supprimer le profil</a></td></tr>{% empty %}<tr><td colspan="4">Aucun profil enregistré. Créez votre premier modèle avec le bouton ci-dessus.</td></tr>{% endfor %}</tbody>
+    <section class="info-banner"><span aria-hidden="true">i</span><p>Créez un modèle, ajoutez ses postes et leurs créneaux, puis choisissez-le lors de la création d’un événement. Vous pouvez aussi enregistrer un événement déjà configuré comme modèle.</p></section>
+    <section class="panel table-panel"><div class="responsive-table"><table class="mobile-card-table">
+        <thead><tr><th>Modèle</th><th>Note interne</th><th>Mis à jour</th><th>Actions</th></tr></thead>
+        <tbody>{% for profile in profiles %}<tr><td data-label="Modèle"><strong>{{ profile.name }}</strong></td><td data-label="Note interne">{{ profile.description|default:"—" }}</td><td data-label="Mis à jour">{{ profile.updated_at|date:"d/m/Y" }}</td><td class="table-actions" data-label="Actions"><a href="{% url 'event_profile_update' profile.pk %}">Modifier le modèle et ses postes</a><a href="{% url 'event_profile_create' profile.pk %}">Créer un événement</a><a class="danger-link" href="{% url 'event_profile_delete' profile.pk %}">Supprimer le modèle</a></td></tr>{% empty %}<tr><td colspan="4">Aucun modèle enregistré. Créez votre premier modèle avec le bouton ci-dessus.</td></tr>{% endfor %}</tbody>
     </table></div></section>
     <p class="muted">Les participants, affectations et règlements sont propres à chaque événement.</p>
 </div>

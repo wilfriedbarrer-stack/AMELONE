@@ -161,7 +161,7 @@ class FamilyAdministrationTests(DataMixin, TestCase):
         self.assertTrue(self.family_user.is_competition_official)
         self.assertEqual(assignment.status, Assignment.Status.DRAFT)
 
-    def test_profile_editor_synchronizes_only_personally_linked_member(self):
+    def test_account_editor_cannot_change_personally_linked_member_function(self):
         self.member.user = self.family_user
         self.member.save()
         sibling = Member.objects.create(
@@ -174,10 +174,10 @@ class FamilyAdministrationTests(DataMixin, TestCase):
         self.assertRedirects(response, reverse("profile_list"))
         self.member.refresh_from_db()
         sibling.refresh_from_db()
-        self.assertTrue(self.member.is_competition_official)
+        self.assertFalse(self.member.is_competition_official)
         self.assertFalse(sibling.is_competition_official)
 
-    def test_profile_revocation_rolls_back_rights_and_permissions_when_member_is_assigned(self):
+    def test_account_rights_edit_preserves_official_member_and_assignment(self):
         family = Family.objects.create(account=self.organizer)
         member = Member.objects.create(
             family=family, user=self.organizer, first_name="Organisation", last_name="Officiel",
@@ -191,11 +191,11 @@ class FamilyAdministrationTests(DataMixin, TestCase):
         response = self.client.post(reverse("profile_update", args=[self.organizer.pk]), {
             "email": self.organizer.email, "role": "family", "is_active": "on",
         })
-        self.assertContains(response, "Retirez les affectations officielles à venir")
+        self.assertRedirects(response, reverse("profile_list"))
         self.organizer.refresh_from_db()
         member.refresh_from_db()
         self.assertTrue(self.organizer.is_competition_official)
         self.assertTrue(member.is_competition_official)
-        self.assertTrue(self.organizer.is_staff)
-        self.assertTrue(self.organizer.is_organizer)
-        self.assertTrue(self.organizer.user_permissions.filter(pk=permission.pk).exists())
+        self.assertFalse(self.organizer.is_staff)
+        self.assertFalse(self.organizer.is_organizer)
+        self.assertFalse(self.organizer.user_permissions.filter(pk=permission.pk).exists())

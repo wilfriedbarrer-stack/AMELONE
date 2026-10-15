@@ -1,4 +1,4 @@
-"""Formulaires privés d’édition des profils par un administrateur."""
+"""Formulaires privés des fiches membres et des coordonnées du responsable."""
 
 from django import forms
 

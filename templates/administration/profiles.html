@@ -1,36 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Profils et droits — AMELONE{% endblock %}
+{% block title %}Comptes et droits — AMELONE{% endblock %}
 {% block content %}
-<header class="page-header">
-    <div class="shell header-copy">
-        <div>
-            <span class="eyebrow">Administration</span>
-            <h1>Profils et droits</h1>
-            <p>Famille : espace personnel. Organisateur : événements, postes et repas. Administrateur : profils et tous les droits.</p>
-            <p>Le profil Officiel de compétition se cumule avec chacun de ces droits.</p>
-        </div>
-        <div class="button-row"><a class="button button-secondary" href="{% url 'administrator_families' %}">Familles, membres et officiels</a><a class="button button-primary" href="{% url 'admin:volunteers_user_add' %}">Créer un compte</a></div>
-    </div>
-</header>
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Réglages</span><h1>Comptes et droits</h1><p>Chaque compte dispose d’un accès famille, organisateur ou administrateur. La fonction d’officiel se gère sur la fiche du membre.</p></div><div class="button-row"><a class="button button-secondary" href="{% url 'administrator_families' %}">Familles et membres</a><a class="button button-primary" href="{% url 'admin:volunteers_user_add' %}">Créer un compte</a></div></div></header>
 <div class="shell page-stack">
-    <section class="panel table-panel">
-        <div class="responsive-table">
-            <table>
-                <thead><tr><th>Nom</th><th>E-mail</th><th>Droits et profil</th><th>État</th><th></th></tr></thead>
-                <tbody>
-                    {% for profile in profiles %}
-                    <tr>
-                        <td data-label="Nom">{{ profile.get_full_name|default:"—" }}</td>
-                        <td data-label="E-mail">{{ profile.email }}</td>
-                        <td data-label="Droits et profil">{% if profile.is_superuser %}Administrateur{% elif profile.is_organizer or profile.is_staff %}Organisateur{% else %}Famille{% endif %}{% if profile.is_competition_official %} + Officiel de compétition{% endif %}</td>
-                        <td data-label="État">{{ profile.is_active|yesno:"Actif,Désactivé" }}</td>
-                        <td class="table-actions"><a href="{% url 'profile_update' profile.pk %}">Modifier le profil et les droits</a>{% if profile.family %}<a href="{% url 'administrator_family_update' profile.family.pk %}">Modifier la famille</a><a href="{% url 'administrator_family_detail' profile.family.pk %}">Voir les membres</a>{% endif %}{% if profile.participant_profile %}<a href="{% url 'administrator_member_update' profile.participant_profile.family_id profile.participant_profile.pk %}">Modifier le profil participant</a>{% endif %}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </section>
-    <a href="{% url 'administration_dashboard' %}">Retour à l’administration</a>
+    <section class="panel table-panel"><div class="responsive-table"><table class="mobile-card-table">
+        <thead><tr><th scope="col">Compte</th><th scope="col">Droits</th><th scope="col">Fonction d’officiel</th><th scope="col">État</th><th scope="col">Actions</th></tr></thead>
+        <tbody>{% for profile in profiles %}<tr>
+            <td data-label="Compte"><strong>{{ profile.get_full_name|default:"Sans nom" }}</strong><br>{{ profile.email }}{% if profile.family %}<br><a href="{% url 'administrator_family_detail' profile.family.pk %}">Famille {{ profile.family.display_name }}</a>{% endif %}</td>
+            <td data-label="Droits">{% if profile.is_superuser %}Administrateur{% elif profile.is_organizer or profile.is_staff %}Organisateur{% else %}Famille{% endif %}</td>
+            <td data-label="Fonction d’officiel">{% if profile.participant_profile %}{% if profile.participant_profile.is_competition_official %}<span class="badge badge-success">Officiel de compétition</span>{% else %}Non attribuée{% endif %}<br><a href="{% url 'administrator_member_update' profile.participant_profile.family_id profile.participant_profile.pk %}">Fiche de {{ profile.participant_profile.full_name }}</a>{% elif profile.is_competition_official %}<span class="badge badge-success">Officiel de compétition</span><br><small>Fonction associée au compte</small>{% else %}Non attribuée{% endif %}</td>
+            <td data-label="État">{{ profile.is_active|yesno:"Actif,Désactivé" }}</td>
+            <td data-label="Actions" class="table-actions"><a href="{% url 'profile_update' profile.pk %}">Modifier les droits</a>{% if profile.family %}<a href="{% url 'administrator_family_detail' profile.family.pk %}">Ouvrir la fiche famille</a>{% endif %}</td>
+        </tr>{% empty %}<tr><td colspan="5">Aucun compte enregistré.</td></tr>{% endfor %}</tbody>
+    </table></div></section>
+    <a href="{% url 'administration_dashboard' %}">Retour aux réglages</a>
 </div>
 {% endblock %}
