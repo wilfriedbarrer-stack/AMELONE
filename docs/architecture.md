@@ -33,6 +33,11 @@ disponibilités et chevauchements horaires sont revérifiés au moment de l'écr
 Le planning public utilise une requête dédiée et ne transmet jamais emails, téléphones,
 dates de naissance, âges, remarques, repas ou paiements. Les exports organisateur sont
 protégés. Les secrets restent exclusivement dans l'environnement du serveur.
+Le filtre familial du planning déduit la famille du compte connecté actif et
+retient les seuls créneaux avec une affectation confirmée d’une inscription active
+de cette famille. Les noms publics et l’occupation totale de ces créneaux sont
+conservés. La réponse ne peut pas être mise en cache partagé et aucun identifiant
+de famille fourni dans l’URL ne permet de changer de famille.
 
 ## Anniversaires
 

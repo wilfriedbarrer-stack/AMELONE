@@ -1,12 +1,17 @@
 """Pages publiques, composées exclusivement de données publiables."""
 
+from urllib.parse import urlencode
+
+from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import ValidationError
 from django.db.models import Min, Prefetch, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
 
-from .models import Assignment, Event, EventDay, Registration, Station, StationSlot
+from .models import Assignment, Event, EventDay, Family, Registration, Station, StationSlot
 
 
 def _published_events():
@@ -43,6 +48,7 @@ def public_events(request):
     )
 
 
+@never_cache
 def public_planning(request, event_id=None, day_id=None):
     """Affiche uniquement les affectations confirmées, sans objet privé en contexte."""
 
@@ -60,6 +66,12 @@ def public_planning(request, event_id=None, day_id=None):
     days = EventDay.objects.none()
     selected_day = None
     rows = []
+    family_scope_active = request.GET.get("scope") == "family"
+    authenticated = request.user.is_authenticated and request.user.is_active
+    family_id = (
+        Family.objects.filter(account_id=request.user.pk).values_list("pk", flat=True).first()
+        if authenticated else None
+    )
     if event is not None:
         days = event.days.all().order_by("date")
         requested_day_id = day_id or request.GET.get("day")
@@ -70,6 +82,20 @@ def public_planning(request, event_id=None, day_id=None):
                 raise Http404("Cette journée publique n'existe pas.") from exc
         else:
             selected_day = days.filter(date__gte=timezone.localdate()).first() or days.first()
+
+    # Construire les liens uniquement à partir des sélections publiques validées.
+    # Aucun identifiant de famille fourni dans l'URL ne détermine ce filtre.
+    selection = {}
+    if event is not None:
+        selection["event"] = str(event.pk)
+    if selected_day is not None:
+        selection["day"] = str(selected_day.pk)
+    planning_url = reverse("public_planning")
+    all_scope_url = f"{planning_url}?{urlencode({**selection, 'scope': 'all'})}"
+    family_target = f"{planning_url}?{urlencode({**selection, 'scope': 'family'})}"
+    if family_scope_active and not authenticated:
+        return redirect_to_login(family_target)
+    family_scope_url = family_target if authenticated else redirect_to_login(family_target).url
 
     if selected_day is not None:
         confirmed = Assignment.objects.filter(
@@ -87,6 +113,14 @@ def public_planning(request, event_id=None, day_id=None):
             )
             .order_by("period", "station__position", "station__name")
         )
+        if family_scope_active:
+            # Une même affectation doit satisfaire les trois conditions. Le
+            # prefetch reste complet pour préserver l'occupation réelle du poste.
+            slots = slots.filter(
+                assignments__status=Assignment.Status.CONFIRMED,
+                assignments__registration__status=Registration.Status.ACTIVE,
+                assignments__registration__member__family_id=family_id,
+            ).distinct() if family_id else slots.none()
         for slot in slots:
             names = sorted(
                 assignment.registration.member.full_name
@@ -133,6 +167,12 @@ def public_planning(request, event_id=None, day_id=None):
             "days": days,
             "selected_day": selected_day,
             "rows": rows,
+            "planning_scope": "family" if family_scope_active else "all",
+            "family_scope_active": family_scope_active,
+            "family_filter_available": authenticated and family_id is not None,
+            "has_family": family_id is not None,
+            "all_scope_url": all_scope_url,
+            "family_scope_url": family_scope_url,
         },
     )
 
