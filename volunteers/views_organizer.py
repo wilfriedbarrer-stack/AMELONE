@@ -84,7 +84,9 @@ def _form_error_messages(error):
 def organizer_dashboard(request):
     now = timezone.now()
     events = Event.objects.exclude(status=Event.Status.ARCHIVED).prefetch_related("days")[:8]
-    upcoming_days = EventDay.objects.filter(date__gte=timezone.localdate()).order_by("date")[:6]
+    upcoming_days = EventDay.objects.filter(date__gte=timezone.localdate()).exclude(
+        event__status=Event.Status.ARCHIVED
+    ).order_by("date")[:6]
     context = {
         "events": events,
         "upcoming_days": upcoming_days,
@@ -107,11 +109,16 @@ def organizer_dashboard(request):
 
 @organizer_required
 def event_list(request):
-    events = Event.objects.annotate(
+    show_archived = request.GET.get("archives") == "1"
+    events = Event.objects.all()
+    events = events.filter(status=Event.Status.ARCHIVED) if show_archived else events.exclude(status=Event.Status.ARCHIVED)
+    events = events.annotate(
         day_count=Count("days", distinct=True),
         registration_count=Count("days__registrations", distinct=True),
     ).order_by("status", "-registration_opens_at")
-    return render(request, "volunteers/organizer/event_list.html", {"events": events})
+    return render(request, "volunteers/organizer/event_list.html", {
+        "events": events, "show_archived": show_archived,
+    })
 
 
 def _event_form(request, event=None):

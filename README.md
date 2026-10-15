@@ -119,6 +119,12 @@ sont décalées et restent modifiables avant publication. Les participants et le
 paiements ne sont pas copiés. Modifier un profil ne change pas les événements
 déjà créés à partir de celui-ci.
 
+Les listes et éditeurs proposent **Supprimer** avec une page de confirmation.
+Un profil peut être supprimé sans modifier les événements déjà créés avec ce
+modèle. Un événement sans historique est supprimé avec sa configuration. S’il
+contient déjà des inscriptions, présences, envois ou paiements, l’action le retire
+de la liste active en conservant son historique dans **Événements archivés**.
+
 Les présences et la restauration se remplissent ensemble : repas complet à la
 journée, collation à la demi-journée, boisson et préférence de paiement au comptoir
 ou via SumUp. Le lien commun se configure dans le règlement de l’association.

@@ -81,8 +81,13 @@ class LogoForm(forms.Form):
 
 @organizer_required
 def administration_dashboard(request):
-    events = Event.objects.prefetch_related("days__menus", "stations").order_by("name")
-    return render(request, "administration/dashboard.html", {"events": events})
+    show_archived = request.GET.get("archives") == "1"
+    events = Event.objects.all()
+    events = events.filter(status=Event.Status.ARCHIVED) if show_archived else events.exclude(status=Event.Status.ARCHIVED)
+    events = events.prefetch_related("days__menus", "stations").order_by("name")
+    return render(request, "administration/dashboard.html", {
+        "events": events, "show_archived": show_archived,
+    })
 
 
 @administrator_required

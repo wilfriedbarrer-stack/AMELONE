@@ -65,7 +65,10 @@ def _snapshot(profile):
 
 
 def _locked_profile(profile, expected_updated_at):
-    current = EventProfile.objects.select_for_update(of=("self",)).get(pk=profile.pk)
+    try:
+        current = EventProfile.objects.select_for_update(of=("self",)).get(pk=profile.pk)
+    except EventProfile.DoesNotExist as error:
+        raise ValidationError("Ce profil d'événement a été supprimé. Rechargez la liste.") from error
     try:
         expected = parse_datetime(expected_updated_at) if isinstance(expected_updated_at, str) else None
     except ValueError:

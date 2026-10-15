@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{% if event %}Modifier{% else %}Créer{% endif %} un événement — AMELONE{% endblock %}
 {% block content %}
-<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Événement</span><h1>{% if event %}Modifier {{ event.name }}{% else %}Créer un événement{% endif %}</h1></div></div></header>
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Événement</span><h1>{% if event %}Modifier {{ event.name }}{% else %}Créer un événement{% endif %}</h1></div>{% if event %}<a class="button button-danger" href="{% url 'event_delete' event.pk %}">Supprimer l’événement</a>{% endif %}</div></header>
 <div class="shell narrow-content page-stack">
   {% if not event %}
   <section class="panel"><h2>Créer depuis un profil</h2><p>Choisissez votre modèle pour reprendre ses postes, créneaux et autres préparatifs à la nouvelle date.</p>

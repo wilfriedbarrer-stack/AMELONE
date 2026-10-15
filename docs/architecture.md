@@ -16,8 +16,11 @@ décrit une disponibilité et un souhait, tandis qu'une affectation distincte oc
 créneau. Les repas conservent une copie du tarif choisi. Les paiements sont des écritures
 manuelles, jamais déduites d'un clic SumUp.
 
-Les suppressions fonctionnelles sont des archivages. Les identifiants UUID ne dépendent
-pas des noms : renommer un poste ou modifier ses horaires ne détache aucune donnée.
+Un événement utilisé est retiré par archivage pour conserver son historique.
+Après confirmation, les événements sans activité et les profils réutilisables
+peuvent être supprimés ; les copies déjà créées depuis un profil restent
+indépendantes. Les identifiants UUID ne dépendent pas des noms : renommer un poste
+ou modifier ses horaires ne détache aucune donnée.
 
 ## Concurrence
 
