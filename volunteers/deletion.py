@@ -14,6 +14,8 @@ from .models import (
     EmailDelivery,
     Event,
     EventDay,
+    EventNotificationCampaign,
+    EventNotificationDelivery,
     EventProfile,
     MealOrder,
     Menu,
@@ -79,7 +81,10 @@ def get_event_deletion_summary(event):
         "orders": orders.count(),
         "payments": Payment.objects.filter(event_id=event_id).count(),
         "attendances": Attendance.objects.filter(event_day__event_id=event_id).count(),
-        "emails": EmailDelivery.objects.filter(event_id=event_id).count(),
+        "emails": (
+            EmailDelivery.objects.filter(event_id=event_id).count()
+            + EventNotificationDelivery.objects.filter(campaign__event_id=event_id).count()
+        ),
     }
     has_history = any(counts[field] for field in (
         "registrations", "assignments", "orders", "payments", "attendances", "emails",
@@ -102,11 +107,15 @@ def delete_event_or_archive(*, event, actor, expected_updated_at):
         raise ValidationError("Cet événement a déjà été supprimé. Rechargez la liste.") from error
     _check_version(current, expected_updated_at)
     list(EventDay.objects.select_for_update(of=("self",)).filter(event=current).order_by("pk"))
+    list(EventNotificationCampaign.objects.select_for_update(of=("self",)).filter(
+        event=current,
+    ).order_by("pk"))
     summary = get_event_deletion_summary(current)
     result = {"id": current.pk, "name": current.name, "mode": summary["mode"], "summary": summary}
     if not summary["has_history"]:
         try:
             with transaction.atomic():
+                EventNotificationCampaign.objects.filter(event=current).delete()
                 current.delete()
         except ProtectedError:
             # Aucun objet protégé ou paiement ne doit être détruit, même si un

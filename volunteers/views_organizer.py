@@ -267,6 +267,9 @@ def event_duplicate(request, event_id):
                 meal_orders_close_at=source.meal_orders_close_at,
                 morning_hot_beverage_enabled=source.morning_hot_beverage_enabled,
                 afternoon_cold_beverage_enabled=source.afternoon_cold_beverage_enabled,
+                **{field: getattr(source, field) for field in (
+                    "notify_publication", "notify_vacancies", "notify_email", "notify_sms",
+                )},
                 sumup_payment_url=source.sumup_payment_url,
                 general_instructions=source.general_instructions,
                 status=Event.Status.DRAFT,

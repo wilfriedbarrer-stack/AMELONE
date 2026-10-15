@@ -293,6 +293,14 @@ class Event(UUIDTimeStampedModel):
     afternoon_cold_beverage_enabled = models.BooleanField(
         _("proposer une boisson fraîche avec la collation de l'après-midi"), default=True, db_default=True,
     )
+    notify_publication = models.BooleanField(
+        _("annoncer la première publication aux familles"), default=True, db_default=True,
+    )
+    notify_vacancies = models.BooleanField(
+        _("rappeler les postes libres aux familles non inscrites"), default=True, db_default=True,
+    )
+    notify_email = models.BooleanField(_("envoyer par email"), default=True, db_default=True)
+    notify_sms = models.BooleanField(_("envoyer par SMS"), default=True, db_default=True)
     status = models.CharField(
         _("statut"), max_length=16, choices=Status.choices, default=Status.DRAFT
     )
@@ -330,10 +338,11 @@ class Event(UUIDTimeStampedModel):
     @transaction.atomic
     def save(self, *args, **kwargs):
         fields = ("morning_hot_beverage_enabled", "afternoon_cold_beverage_enabled")
-        previous = Event.objects.filter(pk=self.pk).values(*fields).first()
+        notification_fields = ("notify_publication", "notify_vacancies", "notify_email", "notify_sms")
+        previous = Event.objects.filter(pk=self.pk).values(*fields, *notification_fields, "status").first()
         update_fields = kwargs.get("update_fields")
         if previous and update_fields is not None:
-            for field in fields:
+            for field in (*fields, *notification_fields):
                 if field not in update_fields:
                     setattr(self, field, previous[field])
         if previous and any(previous[field] != getattr(self, field) for field in fields):
@@ -344,6 +353,13 @@ class Event(UUIDTimeStampedModel):
                 event_id=self.pk
             ).order_by("pk"))
         super().save(*args, **kwargs)
+        status_written = update_fields is None or "status" in update_fields
+        if status_written and self.status == self.Status.PUBLISHED and (
+            not previous or previous["status"] != self.Status.PUBLISHED
+        ):
+            from .event_notifications import record_event_publication
+
+            record_event_publication(self)
 
     def meal_orders_are_open(self, at=None):
         at = at or timezone.now()
@@ -1468,6 +1484,65 @@ class Attendance(UUIDTimeStampedModel):
 
     def __str__(self):
         return f"{self.member} — {self.event_day.date:%d/%m/%Y} : {self.get_status_display()}"
+
+
+class EventNotificationCampaign(UUIDTimeStampedModel):
+    class Kind(models.TextChoices):
+        PUBLICATION = "publication", _("Annonce du nouvel événement")
+        VACANCY_REMINDER = "vacancy_reminder", _("Rappel des postes à pourvoir")
+
+    event = models.ForeignKey(Event, on_delete=models.PROTECT, related_name="notification_campaigns")
+    kind = models.CharField(_("type"), max_length=24, choices=Kind.choices)
+    scheduled_for = models.DateTimeField(_("prévu le"), default=timezone.now)
+    prepared_at = models.DateTimeField(_("destinataires préparés le"), null=True, blank=True)
+    completed_at = models.DateTimeField(_("traité le"), null=True, blank=True)
+    skipped_reason = models.TextField(_("motif de non-envoi"), blank=True)
+
+    class Meta:
+        ordering = ("scheduled_for", "pk")
+        constraints = [models.UniqueConstraint(fields=("event", "kind"), name="unique_event_notification_kind")]
+        verbose_name = _("campagne de notification")
+        verbose_name_plural = _("campagnes de notification")
+
+    def __str__(self):
+        return f"{self.event.name} — {self.get_kind_display()}"
+
+
+class EventNotificationDelivery(UUIDTimeStampedModel):
+    class Channel(models.TextChoices):
+        EMAIL = "email", _("Email")
+        SMS = "sms", _("SMS")
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("En attente")
+        SENDING = "sending", _("En cours d’envoi")
+        ACCEPTED = "accepted", _("Accepté par le service")
+        FAILED = "failed", _("Échec — nouvelle tentative possible")
+        UNCERTAIN = "uncertain", _("Résultat incertain — vérifier le prestataire")
+        SKIPPED = "skipped", _("Non envoyé")
+
+    campaign = models.ForeignKey(EventNotificationCampaign, on_delete=models.CASCADE, related_name="deliveries")
+    family = models.ForeignKey(Family, on_delete=models.PROTECT, related_name="event_notifications")
+    channel = models.CharField(_("canal"), max_length=8, choices=Channel.choices)
+    recipient = models.CharField(_("destinataire"), max_length=255, blank=True)
+    subject = models.CharField(_("objet"), max_length=255, blank=True)
+    body_text = models.TextField(_("message"))
+    status = models.CharField(_("statut"), max_length=12, choices=Status.choices, default=Status.PENDING)
+    attempt_count = models.PositiveIntegerField(_("tentatives"), default=0)
+    provider_message_id = models.CharField(_("identifiant prestataire"), max_length=255, blank=True)
+    last_attempt_at = models.DateTimeField(_("dernière tentative"), null=True, blank=True)
+    accepted_at = models.DateTimeField(_("accepté le"), null=True, blank=True)
+    failure_reason = models.TextField(_("motif"), blank=True)
+
+    class Meta:
+        ordering = ("-created_at", "pk")
+        constraints = [models.UniqueConstraint(fields=("campaign", "family", "channel"), name="unique_campaign_family_channel")]
+        indexes = [models.Index(fields=("status", "created_at"), name="notification_pending_idx")]
+        verbose_name = _("notification d’événement")
+        verbose_name_plural = _("notifications d’événements")
+
+    def __str__(self):
+        return f"{self.get_channel_display()} — {self.family} ({self.get_status_display()})"
 
 
 class EmailDelivery(UUIDTimeStampedModel):

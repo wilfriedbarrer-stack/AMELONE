@@ -226,3 +226,26 @@ entre les tickets. La consultation et l’impression ne modifient aucun paiement
 Le script Render applique les migrations et exécute `collectstatic` lors de la
 publication. Le premier administrateur se crée avec `createsuperuser` ou le
 compte initial prévu par `bootstrap_admin`.
+
+## Annonces et rappels automatiques
+
+Dans un événement, **Autres actions → Annonces et rappels** présente les aperçus
+email/SMS, les familles concernées et l’historique. Les réglages se trouvent dans
+**Modifier les informations → Annonces et rappels**.
+
+L’annonce de première publication concerne toutes les familles actives, une seule
+fois par événement. Le rappel intervient 48 h avant la clôture s’il reste des
+places ; seules les familles sans inscription active à cet événement sont
+concernées. Une famille reçoit au plus un message de chaque type par canal.
+Les anciens événements ne sont pas réannoncés lors de la mise à jour.
+
+Le workflow GitHub vérifie la file toutes les quinze minutes, avec retards
+possibles. Il utilise l’identité temporaire GitHub de ce dépôt et de ce workflow,
+sans mot de passe de base de données ni secret partagé dans GitHub Actions.
+Les envois restent désactivés tant que le compte d’envoi et les expéditeurs ne
+sont pas configurés. Brevo est proposé : emails gratuits dans la limite de son
+offre, SMS sur crédits payants. Voir la [configuration et les offres](docs/emails.md).
+
+Une acceptation par le prestataire ne prouve pas la livraison. Les échecs certains
+peuvent être remis en attente depuis l’interface ; les résultats incertains
+nécessitent une vérification chez le prestataire pour éviter les doublons.
