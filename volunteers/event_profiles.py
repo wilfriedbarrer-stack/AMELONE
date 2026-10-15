@@ -24,7 +24,10 @@ _EVENT_FIELDS = (
     "general_instructions",
     "sumup_payment_url",
 )
-_EVENT_FLAG_FIELDS = ("morning_hot_beverage_enabled", "afternoon_cold_beverage_enabled")
+_EVENT_FLAG_FIELDS = (
+    "morning_hot_beverage_enabled", "afternoon_cold_beverage_enabled",
+    "notify_publication", "notify_vacancies", "notify_email", "notify_sms",
+)
 _STATION_FIELDS = ("name", "description", "instructions", "category", "age_policy", "is_active", "position")
 _CATERING_FIELDS = ("name", "description", "surcharge_cents", "is_active")
 
@@ -112,7 +115,7 @@ def _profile_configuration(profile, event_date):
         for field in _EVENT_FLAG_FIELDS:
             value = snapshot["event"].get(field, True)
             if type(value) is not bool:
-                raise ValidationError("Les réglages des boissons de ce modèle sont invalides.")
+                raise ValidationError("Les réglages d’activation de ce modèle sont invalides.")
             event_fields[field] = value
         anchor = datetime.combine(event_date, time.min)
         windows = {

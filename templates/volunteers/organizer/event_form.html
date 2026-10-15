@@ -38,6 +38,12 @@
         {% include "partials/form_field.html" with field=form.morning_hot_beverage_enabled %}
         {% include "partials/form_field.html" with field=form.afternoon_cold_beverage_enabled %}
       </section>
+      <section class="panel" id="notifications"><h2>Annonces et rappels</h2><p class="help-text">Une annonce à la première publication pour toutes les familles. Un rappel 48 h avant la clôture pour les familles non inscrites, uniquement s’il reste des postes libres. Chaque famille reçoit au plus un message par canal pour chaque campagne.</p>
+        {% include "partials/form_field.html" with field=form.notify_publication %}
+        {% include "partials/form_field.html" with field=form.notify_vacancies %}
+        <div class="form-grid">{% include "partials/form_field.html" with field=form.notify_email %}{% include "partials/form_field.html" with field=form.notify_sms %}</div>
+        {% if event %}<p><a href="{% url 'event_notifications' event.pk %}">Voir les messages et le suivi des envois</a></p>{% else %}<p class="help-text">Les envois nécessitent un service email ou SMS configuré et une automatisation activée.</p>{% endif %}
+      </section>
       <section class="panel"><h2>Publication</h2>{% include "partials/form_field.html" with field=form.status %}</section>
     </div>
     {% if not event %}<section class="info-banner" id="event-model-notice" hidden><span aria-hidden="true">i</span><p>Le nouvel événement reprendra les informations du modèle et sera créé en brouillon. Vérifiez les échéances et les réglages de restauration avant de le publier.</p></section>{% endif %}

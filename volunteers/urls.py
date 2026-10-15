@@ -7,6 +7,8 @@ from . import (
     views_deletion,
     views_family,
     views_family_administration,
+    views_notification_job,
+    views_notifications,
     views_organizer,
     views_profiles,
     views_public,
@@ -16,6 +18,8 @@ from . import (
 )
 
 urlpatterns = [
+    path("notifications/traiter/", views_notification_job.process_notifications_job, name="process_notifications_job"),
+    path("organisateur/evenements/<uuid:event_id>/notifications/", views_notifications.event_notifications, name="event_notifications"),
     path("association/logo/", views_public.association_logo_image, name="association_logo_image"),
     path("organisateur/catalogue-restauration/", views_shared_catalogue.shared_catalogue, name="shared_catalogue"),
     path("organisateur/catalogue-restauration/<str:kind>/ajouter/", views_shared_catalogue.shared_catalogue_create, name="shared_catalogue_create"),

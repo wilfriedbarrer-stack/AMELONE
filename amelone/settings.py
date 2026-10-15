@@ -107,29 +107,47 @@ LOGOUT_REDIRECT_URL = "home"
 PASSWORD_RESET_TIMEOUT = 60 * 60 * 24
 
 EMAIL_ENABLED = os.environ.get("EMAIL_ENABLED", "0") == "1"
-EMAIL_BACKEND = os.environ.get(
-    "EMAIL_BACKEND",
+EMAIL_PROVIDER = os.environ.get("EMAIL_PROVIDER", "django").strip().lower()
+EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "").strip() or (
     (
-        "django.core.mail.backends.smtp.EmailBackend"
+        "volunteers.notification_transports.BrevoEmailBackend"
+        if EMAIL_ENABLED and EMAIL_PROVIDER == "brevo"
+        else "django.core.mail.backends.smtp.EmailBackend"
         if EMAIL_ENABLED
         else (
             "django.core.mail.backends.console.EmailBackend"
             if DEBUG
             else "django.core.mail.backends.dummy.EmailBackend"
         )
-    ),
+    )
 )
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
+EMAIL_TIMEOUT = 10
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "AMELONE <noreply@example.org>")
+EVENT_NOTIFICATIONS_ENABLED = os.environ.get("EVENT_NOTIFICATIONS_ENABLED", "0") == "1"
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
+SMS_ENABLED = os.environ.get("SMS_ENABLED", "0") == "1"
+SMS_PROVIDER = os.environ.get("SMS_PROVIDER", "").strip().lower()
+SMS_SENDER = os.environ.get("SMS_SENDER", "").strip()
 SITE_URL = (
     os.environ.get("SITE_URL")
     or os.environ.get("RENDER_EXTERNAL_URL")
     or "http://localhost:8000"
 ).rstrip("/")
+
+# Identité du seul workflow autorisé à traiter la file, sans secret partagé.
+EVENT_NOTIFICATIONS_JOB_AUDIENCE = "amelone-event-notifications"
+EVENT_NOTIFICATIONS_JOB_REPOSITORY = "wilfriedbarrer-stack/AMELONE"
+EVENT_NOTIFICATIONS_JOB_REPOSITORY_ID = "1419056471"
+EVENT_NOTIFICATIONS_JOB_OWNER_ID = "342539682"
+EVENT_NOTIFICATIONS_JOB_REF = "refs/heads/main"
+EVENT_NOTIFICATIONS_JOB_WORKFLOW_REF = (
+    "wilfriedbarrer-stack/AMELONE/.github/workflows/event-notifications.yml@refs/heads/main"
+)
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "0" if DEBUG else "1") == "1"

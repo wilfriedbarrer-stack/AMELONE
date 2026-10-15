@@ -78,6 +78,10 @@ class EventForm(OrganizerFormMixin, forms.ModelForm):
             "morning_hot_beverage_enabled",
             "afternoon_cold_beverage_enabled",
             "general_instructions",
+            "notify_publication",
+            "notify_vacancies",
+            "notify_email",
+            "notify_sms",
             "status",
         )
         widgets = {

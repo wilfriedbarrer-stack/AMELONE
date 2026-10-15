@@ -367,6 +367,7 @@ class SnackBeverageMigrationTests(TransactionTestCase):
         previous = [("volunteers", "0010_official_volunteer_meal_pricing")]
         target = [("volunteers", "0011_snack_beverages")]
         executor = MigrationExecutor(connection)
+        restore_targets = executor.loader.graph.leaf_nodes("volunteers")
         try:
             executor.migrate(previous)
             old_apps = executor.loader.project_state(previous).apps
@@ -422,7 +423,7 @@ class SnackBeverageMigrationTests(TransactionTestCase):
             self.assertTrue(current_event.morning_hot_beverage_enabled)
             self.assertTrue(current_event.afternoon_cold_beverage_enabled)
         finally:
-            MigrationExecutor(connection).migrate(target)
+            MigrationExecutor(connection).migrate(restore_targets)
 
 
 class SnackBeverageSchemaGuardTests(SimpleTestCase):
