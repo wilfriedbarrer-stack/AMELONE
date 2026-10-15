@@ -1,26 +1,56 @@
 {{ form.menu_options|json_script:"menu-options" }}
+{{ form.official_pricing_data|json_script:"official-pricing-options" }}
 <script>
 (() => {
  const availability = document.getElementById('id_availability'), menu = document.getElementById('id_menu');
  const noMeal = document.getElementById('id_no_meal'), beverage = document.getElementById('id_beverage');
  const snacks = ['id_morning_snack', 'id_afternoon_snack'].map(id => document.getElementById(id)).filter(Boolean);
- if (!menu || !noMeal) return;
  const options = JSON.parse(document.getElementById('menu-options').textContent);
+ const pricing = JSON.parse(document.getElementById('official-pricing-options').textContent);
+ const preferredStation = document.getElementById('id_preferred_station');
+ const slotChoices = [...document.querySelectorAll('input[name="station_slots"]')];
+ const payment = document.getElementById('id_payment_method');
+ function isExempt() {
+  if (pricing.fixed_exemption !== null) return pricing.fixed_exemption;
+  if (!pricing.eligible) return false;
+  if (pricing.slots !== null) return !slotChoices.some(input => input.checked && pricing.slots[input.value] === 'volunteer');
+  if (pricing.has_assignments) return !pricing.has_volunteer_assignment;
+  return !preferredStation || pricing.stations[preferredStation.value] !== 'volunteer';
+ }
  const isFullDay = () => availability ? availability.value === 'full_day' : '{{ form.meal_availability|default:"full_day"|escapejs }}' === 'full_day';
  function updateMenus() {
-  if (!availability) return;
+  if (!availability || !menu) return;
   const previous = menu.value, type = isFullDay() ? 'full_meal' : 'snack';
   menu.replaceChildren(new Option('Choisir selon la présence', ''));
   for (const option of options) {
    if (option.type !== type && option.legacy !== availability.value) continue;
-   const label = option.label || option.name + ' — supplément ' + (option.surcharge / 100).toLocaleString('fr-FR', {style:'currency',currency:'EUR'});
+   const label = isExempt() ? option.official_label : option.standard_label;
    menu.add(new Option(label, option.id));
   }
   if ([...menu.options].some(option => option.value === previous)) menu.value = previous;
   const entitlement = document.getElementById('meal-entitlement');
   if (entitlement) entitlement.textContent = isFullDay() ? 'À la journée, choisissez un repas complet et, si vous le souhaitez, une collation le matin et une l’après-midi.' : 'À la demi-journée, choisissez une collation.';
  }
+ function updatePricing() {
+  const exempt = isExempt();
+  for (const [name, prices] of Object.entries(pricing.option_prices)) {
+   const select = document.getElementById('id_' + name);
+   if (!select) continue;
+   const labels = new Map(prices.map(option => [option.id, exempt ? option.official : option.standard]));
+   if (name === 'menu') for (const option of options) labels.set(option.id, exempt ? option.official_label : option.standard_label);
+   for (const option of select.options) if (labels.has(option.value)) option.textContent = labels.get(option.value);
+  }
+  if (payment && payment.type !== 'hidden') {
+   payment.disabled = exempt;
+   const row = payment.closest('.field');
+   if (row) { row.hidden = exempt; row.style.display = exempt ? 'none' : ''; }
+  }
+  const title = document.getElementById('official-meal-pricing-title'), detail = document.getElementById('official-meal-pricing-detail');
+  if (title) title.textContent = exempt ? 'Officiel de compétition : aucun supplément pour le repas et la boisson.' : 'Poste bénévole : restauration au tarif bénévole.';
+  if (detail) detail.textContent = exempt ? 'Les collations du matin et de l’après-midi sont également sans supplément.' : 'Un officiel inscrit à un poste bénévole règle son repas, ses collations et sa boisson comme les autres bénévoles.';
+ }
  function updateMeal() {
+  if (!menu || !noMeal) return;
   menu.disabled = noMeal.checked;
   if (beverage) beverage.disabled = noMeal.checked;
   if (noMeal.checked) { menu.value = ''; if (beverage) beverage.value = ''; }
@@ -31,8 +61,10 @@
    if (snack.disabled) snack.value = '';
   }
  }
- if (availability) availability.addEventListener('change', () => {updateMenus(); updateMeal();});
- noMeal.addEventListener('change', updateMeal);
- updateMenus(); updateMeal();
+ if (availability) availability.addEventListener('change', () => {updateMenus(); updateMeal(); updatePricing();});
+ if (preferredStation) preferredStation.addEventListener('change', updatePricing);
+ for (const input of slotChoices) input.addEventListener('change', updatePricing);
+ if (noMeal) noMeal.addEventListener('change', updateMeal);
+ updateMenus(); updateMeal(); updatePricing();
 })();
 </script>

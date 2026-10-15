@@ -16,6 +16,7 @@ from . import (
 )
 
 urlpatterns = [
+    path("association/logo/", views_public.association_logo_image, name="association_logo_image"),
     path("organisateur/catalogue-restauration/", views_shared_catalogue.shared_catalogue, name="shared_catalogue"),
     path("organisateur/catalogue-restauration/<str:kind>/ajouter/", views_shared_catalogue.shared_catalogue_create, name="shared_catalogue_create"),
     path("organisateur/catalogue-restauration/<str:kind>/importer/", views_shared_catalogue.shared_catalogue_import, name="shared_catalogue_import"),

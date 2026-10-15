@@ -1,17 +1,47 @@
 """Pages publiques, composées exclusivement de données publiables."""
 
+import base64
+import binascii
 from urllib.parse import urlencode
 
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import ValidationError
 from django.db.models import Min, Prefetch, Q
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_safe
 
-from .models import Assignment, Event, EventDay, Family, Registration, Station, StationSlot
+from .models import (
+    Assignment,
+    Event,
+    EventDay,
+    Family,
+    Registration,
+    SiteBranding,
+    Station,
+    StationSlot,
+)
+
+
+@never_cache
+@require_safe
+def association_logo_image(request):
+    """Réutiliser le logo courant sans répéter son contenu dans chaque ticket."""
+    logo = SiteBranding.objects.filter(pk=1).values_list("logo_data", flat=True).first() or ""
+    metadata, separator, encoded = logo.partition(",")
+    allowed = {f"data:{mime};base64": mime for mime in ("image/png", "image/jpeg", "image/webp")}
+    if not separator or metadata not in allowed:
+        raise Http404("Aucun logo disponible.")
+    try:
+        data = base64.b64decode(encoded, validate=True)
+    except (ValueError, binascii.Error) as error:
+        raise Http404("Aucun logo disponible.") from error
+    if not data or len(data) > 1024 * 1024:
+        raise Http404("Aucun logo disponible.")
+    return HttpResponse(data, content_type=allowed[metadata])
 
 
 def _published_events():
