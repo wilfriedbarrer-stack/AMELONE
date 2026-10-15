@@ -20,11 +20,11 @@
                 <tbody>
                     {% for profile in profiles %}
                     <tr>
-                        <td>{{ profile.get_full_name|default:"—" }}</td>
-                        <td>{{ profile.email }}</td>
-                        <td>{% if profile.is_superuser %}Administrateur{% elif profile.is_organizer or profile.is_staff %}Organisateur{% else %}Famille{% endif %}{% if profile.is_competition_official %} + Officiel de compétition{% endif %}</td>
-                        <td>{{ profile.is_active|yesno:"Actif,Désactivé" }}</td>
-                        <td><a href="{% url 'profile_update' profile.pk %}">Modifier le profil et les droits</a></td>
+                        <td data-label="Nom">{{ profile.get_full_name|default:"—" }}</td>
+                        <td data-label="E-mail">{{ profile.email }}</td>
+                        <td data-label="Droits et profil">{% if profile.is_superuser %}Administrateur{% elif profile.is_organizer or profile.is_staff %}Organisateur{% else %}Famille{% endif %}{% if profile.is_competition_official %} + Officiel de compétition{% endif %}</td>
+                        <td data-label="État">{{ profile.is_active|yesno:"Actif,Désactivé" }}</td>
+                        <td class="table-actions"><a href="{% url 'profile_update' profile.pk %}">Modifier le profil et les droits</a>{% if profile.family %}<a href="{% url 'administrator_family_update' profile.family.pk %}">Modifier la famille</a><a href="{% url 'administrator_family_detail' profile.family.pk %}">Voir les membres</a>{% endif %}{% if profile.participant_profile %}<a href="{% url 'administrator_member_update' profile.participant_profile.family_id profile.participant_profile.pk %}">Modifier le profil participant</a>{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

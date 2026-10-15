@@ -183,3 +183,17 @@ et à venir. Les tarifs initialement réservés sont conservés pour être réap
 en cas de retrait, même si le catalogue a changé entre-temps. Les réservations
 passées et les paiements enregistrés sont conservés. Un éventuel trop-perçu reste
 visible dans le solde de la famille.
+
+## Modifier les profils depuis l’administration
+
+Dans **Administration → Familles, membres et officiels**, ouvrez une famille,
+puis choisissez **Modifier le profil** sur la personne concernée. L’administrateur
+peut corriger son prénom, son nom, sa date de naissance et son habilitation
+d’officiel, y compris pour un membre archivé. Les règles des affectations à venir
+restent vérifiées et les suppléments sont recalculés lors d’un changement
+d’habilitation.
+
+**Modifier les informations de la famille** permet de corriger le nom de la
+famille et les coordonnées du responsable. Les droits et l’état du compte
+se modifient dans **Gérer les profils et les droits**. Les liens entre compte,
+famille et participant sont conservés lors de ces modifications.

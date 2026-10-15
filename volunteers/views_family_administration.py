@@ -5,14 +5,16 @@ from uuid import UUID
 from django import forms
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
+from .forms_family_administration import AdministratorFamilyAccountForm, AdministratorMemberForm
 from .models import Family, Member, User
 from .views_administration import administrator_required
+from .views_family import _report_validation_error
 
 
 class MemberOfficialForm(forms.Form):
@@ -101,3 +103,90 @@ def administrator_family_detail(request, family_id):
     return render(request, "administration/family_detail.html", {
         "family": family, "members": members,
     })
+
+
+def _locked_administrator_accounts(request, *account_ids):
+    """Lock accounts before the family/member and reject a concurrent role change."""
+    users = {
+        user.pk: user for user in User.objects.select_for_update()
+        .filter(pk__in={request.user.pk, *account_ids}).order_by("pk")
+    }
+    actor = users.get(request.user.pk)
+    if actor is None or not actor.is_active or not actor.is_superuser:
+        raise PermissionDenied("Les droits administrateur sont nécessaires.")
+    return users
+
+
+@administrator_required
+@require_http_methods(["GET", "POST"])
+def administrator_member_update(request, family_id, member_id):
+    family = get_object_or_404(Family.objects.select_related("account"), pk=family_id)
+    member = get_object_or_404(Member, pk=member_id, family_id=family.pk)
+    form = AdministratorMemberForm(request.POST if request.method == "POST" else None, instance=member)
+    if request.method == "POST":
+        try:
+            with transaction.atomic():
+                linked_account_id = member.user_id
+                users = _locked_administrator_accounts(request, *(
+                    (linked_account_id,) if linked_account_id else ()
+                ))
+                member = get_object_or_404(
+                    Member.objects.select_for_update(of=("self",)),
+                    pk=member_id, family_id=family.pk,
+                )
+                if member.user_id != linked_account_id:
+                    raise ValidationError("Le compte lié à ce membre a changé. Actualisez cette page.")
+                # Rebuild and validate against the locked row, preserving account,
+                # family and archive status even if forged values were submitted.
+                form = AdministratorMemberForm(request.POST, instance=member)
+                if form.is_valid():
+                    member = form.save()
+                    if member.user_id:
+                        account = users[member.user_id]
+                        account.is_competition_official = member.is_competition_official
+                        account.save(update_fields=["is_competition_official"])
+                    messages.success(request, f"Le profil de {member.full_name} a été enregistré.")
+                    return redirect("administrator_family_detail", family_id=family.pk)
+        except ValidationError as error:
+            _report_validation_error(form, error)
+    return render(request, "administration/member_form.html", {
+        "family": family, "member": member, "form": form,
+    })
+
+
+@administrator_required
+@require_http_methods(["GET", "POST"])
+def administrator_family_update(request, family_id):
+    family = get_object_or_404(Family.objects.select_related("account"), pk=family_id)
+    form = AdministratorFamilyAccountForm(
+        request.POST if request.method == "POST" else None, family=family,
+    )
+    if request.method == "POST":
+        try:
+            with transaction.atomic():
+                account_id = family.account_id
+                users = _locked_administrator_accounts(request, account_id)
+                family = get_object_or_404(
+                    Family.objects.select_for_update(of=("self",)), pk=family.pk,
+                )
+                if family.account_id != account_id:
+                    raise ValidationError("Le compte responsable a changé. Actualisez cette page.")
+                family.account = users[account_id]
+                form = AdministratorFamilyAccountForm(request.POST, family=family)
+                if form.is_valid():
+                    account = family.account
+                    for field in ("first_name", "last_name", "email", "phone"):
+                        setattr(account, field, form.cleaned_data[field].strip())
+                    family.name = form.cleaned_data["family_name"].strip()
+                    account.full_clean()
+                    family.full_clean()
+                    form.save()
+                    messages.success(request, "La famille et les coordonnées du responsable ont été enregistrées.")
+                    return redirect("administrator_family_detail", family_id=family.pk)
+        except ValidationError as error:
+            _report_validation_error(form, error)
+        except IntegrityError:
+            # A concurrent account creation/edit can win the database's email
+            # uniqueness constraint after clean_email; the whole edit rolls back.
+            form.add_error("email", "Cette adresse e-mail est déjà utilisée.")
+    return render(request, "administration/family_form.html", {"family": family, "form": form})
