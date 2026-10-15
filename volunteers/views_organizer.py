@@ -12,6 +12,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from .event_profiles import create_event_from_profile
 from .forms_organizer import (
     AssignmentForm,
     AttendanceForm,
@@ -27,6 +28,7 @@ from .forms_organizer import (
     StationSlotFormSet,
     TrackingFilterForm,
 )
+from .forms_profiles import ProfileEventCreationForm
 from .models import (
     Assignment,
     Attendance,
@@ -147,12 +149,36 @@ def _event_form(request, event=None):
             "form": form,
             "event": event,
             "additional_days": event.days.order_by("date")[1:] if event else (),
+            "profile_creation_form": ProfileEventCreationForm(prefix="profile") if event is None else None,
         },
     )
 
 
 @organizer_required
 def event_create(request):
+    if request.method == "POST" and request.POST.get("action") == "create_from_profile":
+        profile_form = ProfileEventCreationForm(request.POST, prefix="profile")
+        if profile_form.is_valid():
+            try:
+                event = create_event_from_profile(
+                    profile=profile_form.cleaned_data["profile"],
+                    name=profile_form.cleaned_data["name"],
+                    event_date=profile_form.cleaned_data["event_date"],
+                )
+            except ValidationError as error:
+                for text in _form_error_messages(error):
+                    profile_form.add_error(None, text)
+            else:
+                messages.success(
+                    request,
+                    "L’événement a été créé en brouillon avec les postes du profil. "
+                    "Vérifiez ses informations et ses échéances avant publication.",
+                )
+                return redirect("event_update", event_id=event.pk)
+        return render(request, "volunteers/organizer/event_form.html", {
+            "form": EventForm(), "event": None, "additional_days": (),
+            "profile_creation_form": profile_form,
+        })
     return _event_form(request)
 
 

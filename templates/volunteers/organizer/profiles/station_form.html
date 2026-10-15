@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Poste du profil {{ profile.name }} — AMELONE{% endblock %}
+{% block content %}
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Profil d’événement · {{ profile.name }}</span><h1>{% if station_index != None %}Modifier le poste{% else %}Ajouter un poste au profil{% endif %}</h1><p>Définissez le poste et les créneaux qui seront repris lors de la création d’un événement.</p></div></div></header>
+<div class="shell narrow-content page-stack">
+    {% if profile_error %}<div class="alert alert-error" role="alert">{{ profile_error }}</div>{% endif %}
+    <form method="post" class="stack-form" novalidate>
+        {% csrf_token %}
+        <section class="panel"><h2>Poste</h2>{% include "partials/form_fields.html" with form=form %}</section>
+        <section class="panel" id="profile-slot-forms"><h2>Créneaux, capacités et horaires</h2><p class="help-text">Jour 1 correspond à la date de l’événement. Cochez « Supprimer » pour retirer un créneau, puis enregistrez le poste.</p>{{ formset.management_form }}{% if formset.non_form_errors %}<div class="alert alert-error" role="alert">{{ formset.non_form_errors }}</div>{% endif %}{% for slot_form in formset %}<div class="inline-form">{% include "partials/form_fields.html" with form=slot_form %}</div>{% endfor %}</section>
+        <div class="button-row"><button class="button button-secondary" id="add-profile-slot" type="button">Ajouter un créneau</button><span class="help-text" id="profile-slot-feedback" aria-live="polite"></span></div>
+        <template id="empty-profile-slot"><div class="inline-form">{% include "partials/form_fields.html" with form=formset.empty_form %}</div></template>
+        <div class="form-actions"><a class="button button-quiet" href="{% url 'event_profile_update' profile.pk %}">Annuler</a><button class="button button-primary" type="submit">Enregistrer le poste et ses créneaux</button></div>
+    </form>
+</div>
+<script>
+(() => {
+ const addButton = document.getElementById('add-profile-slot');
+ const total = document.getElementById('id_{{ formset.prefix }}-TOTAL_FORMS');
+ const container = document.getElementById('profile-slot-forms');
+ const empty = document.getElementById('empty-profile-slot');
+ if (!addButton || !total || !container || !empty) return;
+ addButton.addEventListener('click', () => {
+  const index = Number(total.value);
+  const row = empty.content.cloneNode(true);
+  const wrapper = document.createElement('div');
+  wrapper.append(row);
+  wrapper.innerHTML = wrapper.innerHTML.replace(/__prefix__/g, String(index));
+  while (wrapper.firstChild) container.append(wrapper.firstChild);
+  total.value = String(index + 1);
+  document.getElementById('profile-slot-feedback').textContent = 'Créneau ajouté.';
+  container.lastElementChild.querySelector('input:not([type="hidden"]), select')?.focus();
+ });
+})();
+</script>
+{% endblock %}

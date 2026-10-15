@@ -107,9 +107,17 @@ Déploiement : installer les dépendances mises à jour, appliquer la migration
 
 ## Profils, restauration et imports
 
-Dans Administration, enregistrez un profil réutilisable depuis un événement puis
-créez un nouveau brouillon à une autre date. La configuration des postes, menus et
-boissons est reprise sans copier les participants ni les paiements.
+Dans **Administration → Profils d’événements**, créez un profil indépendant,
+puis ajoutez ses postes et leurs créneaux : matin, après-midi ou journée,
+personnes nécessaires, horaires, catégorie et règle d’âge. Chaque profil peut
+être modifié avant de le réutiliser. Vous pouvez aussi enregistrer le profil
+d’un événement déjà configuré, avec ses menus et ses boissons.
+
+Dans **Créer un événement**, choisissez le profil, le nom et la date du nouvel
+événement. Ses postes sont copiés dans un brouillon indépendant ; les échéances
+sont décalées et restent modifiables avant publication. Les participants et les
+paiements ne sont pas copiés. Modifier un profil ne change pas les événements
+déjà créés à partir de celui-ci.
 
 Les présences et la restauration se remplissent ensemble : repas complet à la
 journée, collation à la demi-journée, boisson et préférence de paiement au comptoir

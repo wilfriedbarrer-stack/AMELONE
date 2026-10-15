@@ -3,11 +3,16 @@
 {% block content %}
 <header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Événement</span><h1>{% if event %}Modifier {{ event.name }}{% else %}Créer un événement{% endif %}</h1></div></div></header>
 <div class="shell narrow-content page-stack">
-  {% if not event %}<p>Pour reprendre les postes, menus et boissons d'une configuration existante, <a href="{% url 'event_profile_list' %}">choisissez un profil réutilisable</a>.</p>{% endif %}
+  {% if not event %}
+  <section class="panel"><h2>Créer depuis un profil</h2><p>Choisissez votre modèle pour reprendre ses postes, créneaux et autres préparatifs à la nouvelle date.</p>
+    {% if profile_creation_form %}<form method="post" class="stack-form" novalidate>{% csrf_token %}<input type="hidden" name="action" value="create_from_profile">{% include "partials/form_fields.html" with form=profile_creation_form %}<div class="form-actions"><button class="button button-primary" type="submit">Créer depuis ce profil</button></div></form>{% endif %}
+    <div class="button-row"><a href="{% url 'event_profile_list' %}">Gérer les profils et leurs postes</a><a href="{% url 'event_profile_new' %}">Créer un profil d’événement</a></div>
+  </section>
+  {% endif %}
   <form method="post" class="stack-form" novalidate>
     {% csrf_token %}
     <section class="panel">
-      <h2>Informations générales</h2>
+      <h2>{% if event %}Informations générales{% else %}Créer sans profil{% endif %}</h2>
       {% include "partials/form_fields.html" with form=form %}
       {% if additional_days %}<p class="help-text">Cet événement comporte également les dates suivantes, qui sont conservées : {% for day in additional_days %}{{ day.date|date:"d/m/Y" }}{% if not forloop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
     </section>

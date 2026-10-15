@@ -6,11 +6,24 @@ des postes** et **Récapitulatif des repas**.
 
 ## Réutiliser un événement
 
-Enregistrer un profil depuis un événement, puis ouvrir **Profils réutilisables**
-et choisir une nouvelle date. Les postes, horaires, capacités, menus et boissons
-sont repris. Les échéances d’inscription et de restauration se décalent avec la
-date, en heure de Paris. Le nouvel événement reste un brouillon à vérifier avant
-publication. Aucun participant, affectation, paiement ou repas réservé n’est copié.
+Ouvrir **Administration → Profils d’événements → Créer un profil d’événement**.
+Renseigner son nom, son lieu et ses consignes, puis ajouter les postes. Pour
+chaque poste, définir sa catégorie, sa règle d’âge et ses créneaux : matin,
+après-midi ou journée, capacité et horaires facultatifs. Le profil se prépare
+sans créer d’événement daté. La liste permet de modifier ensuite ses informations,
+ses postes et ses créneaux.
+
+Dans **Créer un événement**, choisir le profil, saisir le nom et la date, puis
+cliquer **Créer depuis ce profil**. Les postes et leurs réglages sont copiés dans
+un nouveau brouillon. Modifier ensuite le modèle n’altère pas cet événement.
+
+Il reste possible d’enregistrer un profil depuis un événement configuré : ses
+menus et boissons sont alors conservés en plus des postes. Les échéances
+d’inscription et de restauration se décalent avec la nouvelle date, en heure de
+Paris. Pour un profil créé directement, les valeurs initiales sont une ouverture
+à J−30 à 9 h, une clôture à J−1 à 18 h et une clôture des repas à J−1 à 12 h.
+Vérifier et ajuster ces échéances dans le brouillon avant publication.
+Aucun participant, affectation, paiement ou repas réservé n’est copié.
 
 La création et la modification utilisent **Date de l’événement** dans le
 formulaire général. Les dates multiples des événements anciens sont conservées.

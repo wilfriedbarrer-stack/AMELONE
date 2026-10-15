@@ -124,6 +124,7 @@ def _profile_configuration(profile, event_date):
 def create_event_from_profile(*, profile, name, event_date):
     """Crée un nouveau brouillon et ses postes/menus, sans données de familles."""
 
+    profile = EventProfile.objects.select_for_update(of=("self",)).get(pk=profile.pk)
     snapshot, event_fields, windows = _profile_configuration(profile, event_date)
     event = Event(name=name.strip(), status=Event.Status.DRAFT, **event_fields, **windows)
     event.full_clean()
