@@ -302,6 +302,65 @@ class SnackBeverageBackendTests(DataMixin, TestCase):
         order.refresh_from_db()
         self.assertEqual(order.registration_id, self.reg.pk)
 
+    def test_rollout_legacy_drink_cannot_change_to_disabled_or_incompatible_morning_offer(self):
+        order = save_meal_order(registration=self.reg, menu=self.menu, beverage=self.cold)
+        for enabled in (True, False):
+            with self.subTest(enabled=enabled):
+                MealOrder.objects.filter(pk=order.pk).update(beverage_availability="legacy")
+                self.event.morning_hot_beverage_enabled = enabled
+                self.event.save(update_fields=("morning_hot_beverage_enabled",))
+                with self.assertRaises(BusinessRuleError):
+                    save_participation(
+                        member=self.member, event_day=self.day, availability=Registration.Availability.MORNING,
+                        actor=self.family_user, meal_choices={"menu": self.snack, "beverage": self.cold},
+                    )
+                self.reg.refresh_from_db()
+                order.refresh_from_db()
+                self.assertEqual(self.reg.availability, Registration.Availability.FULL_DAY)
+                self.assertEqual(order.beverage_id, self.cold.pk)
+                self.assertEqual(order.total_surcharge_cents, 620)
+
+    def test_rollout_legacy_same_period_disabled_drink_remains_preserved(self):
+        self.half_day()
+        order = save_meal_order(registration=self.reg, menu=self.snack, beverage=self.hot)
+        MealOrder.objects.filter(pk=order.pk).update(beverage_availability="legacy")
+        self.event.morning_hot_beverage_enabled = False
+        self.event.save(update_fields=("morning_hot_beverage_enabled",))
+        save_participation(
+            member=self.member, event_day=self.day, availability=Registration.Availability.MORNING,
+            actor=self.family_user, meal_choices={"menu": self.snack, "beverage": self.hot},
+        )
+        order.refresh_from_db()
+        self.assertEqual(order.beverage_availability, Registration.Availability.MORNING)
+        self.assertEqual(order.total_surcharge_cents, 230)
+
+    def test_rollout_legacy_drink_can_move_to_an_enabled_period_with_correct_temperature(self):
+        order = save_meal_order(registration=self.reg, menu=self.menu, beverage=self.hot)
+        MealOrder.objects.filter(pk=order.pk).update(beverage_availability="legacy")
+        save_participation(
+            member=self.member, event_day=self.day, availability=Registration.Availability.MORNING,
+            actor=self.family_user, meal_choices={"menu": self.snack, "beverage": self.hot},
+        )
+        order.refresh_from_db()
+        self.assertEqual(order.beverage_availability, Registration.Availability.MORNING)
+        self.assertEqual(order.total_surcharge_cents, 230)
+
+    def test_rollout_freezing_phase_preserves_order_prices_timestamps_and_payments(self):
+        order = save_meal_order(registration=self.reg, menu=self.menu, beverage=self.cold)
+        MealOrder.objects.filter(pk=order.pk).update(beverage_availability="legacy")
+        Payment.objects.create(
+            family=self.family, event=self.event, amount_cents=620, method=Payment.Method.SUMUP,
+        )
+        before = MealOrder.objects.values().get(pk=order.pk)
+        payments = list(Payment.objects.values().order_by("pk"))
+        self.reg.note = "Autre remarque"
+        self.reg.save(update_fields=("note",))
+        after = MealOrder.objects.values().get(pk=order.pk)
+        self.assertEqual(after.pop("beverage_availability"), Registration.Availability.FULL_DAY)
+        before.pop("beverage_availability")
+        self.assertEqual(after, before)
+        self.assertEqual(list(Payment.objects.values().order_by("pk")), payments)
+
 
 class SnackBeverageMigrationTests(TransactionTestCase):
     def test_real_migration_preserves_existing_prices_and_payments_and_records_drink_period(self):

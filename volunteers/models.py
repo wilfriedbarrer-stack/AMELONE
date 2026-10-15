@@ -681,10 +681,21 @@ class Registration(UUIDTimeStampedModel):
         list(EventDay.objects.select_for_update(of=("self",)).filter(
             pk__in=day_ids
         ).order_by("pk"))
-        Registration.objects.select_for_update(of=("self",)).filter(pk=self.pk).first()
+        locked_registration = Registration.objects.select_for_update(of=("self",)).filter(pk=self.pk).first()
         orders = list(MealOrder.objects.select_for_update(of=("self",)).filter(
             registration_id=self.pk
         ).order_by("pk"))
+        if locked_registration:
+            legacy_orders = []
+            for order in orders:
+                if order.beverage_availability == "legacy":
+                    # An old app instance may have written this order after the
+                    # migration. Freeze its original period before changing the
+                    # registration, without changing its financial history.
+                    order.beverage_availability = locked_registration.availability if order.beverage_id else ""
+                    legacy_orders.append(order)
+            if legacy_orders:
+                MealOrder.objects.bulk_update(legacy_orders, ("beverage_availability",))
         super().save(*args, **kwargs)
         if orders:
             from .official_pricing import reconcile_official_meal_orders
