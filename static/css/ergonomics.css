@@ -36,6 +36,20 @@
   .field-options > div > div { padding: .7rem .8rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--cream); }
   .field-options > div label { min-height: 1.5rem; }
   .button-row { gap: .75rem; }
+  .organizer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 1.5rem; }
+  .organizer-grid > * { min-width: 0; }
+  .list-item > div { min-width: 0; }
+  .list-item strong, .list-item small, .assignment-line { overflow-wrap: anywhere; }
+  .list-item > div small { display: block; margin-top: .3rem; color: var(--ink-soft); line-height: 1.5; }
+  .list-item > .badge { flex: 0 0 auto; }
+  .list-item.vertical { flex-direction: column; align-items: stretch; gap: .8rem; }
+  .list-item.vertical > div:first-child strong { display: block; line-height: 1.4; }
+  .assignment-line { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: .8rem; border-left: .2rem solid var(--forest); border-radius: .45rem; background: var(--mint-pale); }
+  .assignment-line > span:first-child { flex: 1 1 100%; line-height: 1.5; }
+  .assignment-line form { margin: 0; }
+  .link-button { display: inline-flex; align-items: center; min-height: 2.5rem; padding: .4rem .6rem; border: 0; border-radius: .4rem; color: var(--forest); background: transparent; font-weight: 700; text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
+  .link-button.danger-link { color: var(--danger); }
+  .filter-date { align-self: center; margin: 0; color: var(--ink-soft); }
   .form-actions { gap: .75rem; margin-top: .5rem; padding-top: 1.25rem; }
   .filter-bar { gap: 1rem; align-items: end; }
   .filter-bar .field { flex-basis: 16rem; }
@@ -116,7 +130,7 @@
   .page-stack { gap: 1.2rem; padding-block: 1.25rem 3rem; }
   .panel-heading { flex-wrap: wrap; }
   .panel-heading .button-row { width: 100%; }
-  .form-grid, .participation-grid, .event-section-grid, .settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .form-grid, .participation-grid, .event-section-grid, .settings-grid, .organizer-grid { grid-template-columns: minmax(0, 1fr); }
   .form-grid .field, .participation-grid .field { grid-column: auto; }
   .filter-bar { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; }
   .filter-bar .field { flex: 1 1 100%; }

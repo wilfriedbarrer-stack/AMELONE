@@ -47,6 +47,12 @@ from .models import (
     Station,
     StationSlot,
 )
+from .scheduling import (
+    event_assignment_conflicts,
+    lock_schedule_members,
+    station_schedule_context,
+    validate_station_schedule,
+)
 from .services import (
     birthday_alerts_for_event,
     build_assignment_email_preview,
@@ -151,6 +157,16 @@ def _event_form(request, event=None, *, creation_form=None, form_data=None):
             for text in _form_error_messages(error):
                 form.add_error("event_date", text)
         else:
+            if (
+                event and form.initial.get("status") == Event.Status.ARCHIVED
+                and saved.status != Event.Status.ARCHIVED
+                and event_assignment_conflicts(saved)
+            ):
+                messages.warning(
+                    request,
+                    "Cet événement a été réactivé avec des conflits d’horaires existants. "
+                    "Ouvrez Postes → Gérer les affectations pour les corriger avant confirmation.",
+                )
             messages.success(request, "L'événement a été enregistré.")
             return redirect("event_detail", event_id=saved.pk)
     return render(
@@ -329,6 +345,13 @@ def _station_form(request, event, station=None):
     if request.method == "POST" and form.is_valid() and formset.is_valid():
         try:
             with transaction.atomic():
+                final_slots = [
+                    item.instance for item in formset.forms
+                    if item.cleaned_data and not item.cleaned_data.get("DELETE")
+                ]
+                locked_member_ids = lock_schedule_members([
+                    item.instance for item in formset.forms if item.instance.pk
+                ])
                 Event.objects.select_for_update().get(pk=event.pk)
                 list(EventDay.objects.select_for_update().filter(event=event).order_by("pk"))
                 existing_ids = [item.instance.pk for item in formset.forms if item.instance.pk]
@@ -339,11 +362,13 @@ def _station_form(request, event, station=None):
                             raise ValidationError("Un créneau avec un historique d’affectations ne peut pas être supprimé. Retirez les affectations et désactivez le poste.")
                     elif item.cleaned_data and item.instance.pk:
                         item.instance.full_clean()
-                saved = form.save(commit=False)
-                saved.event = event
-                saved.save()
-                formset.instance = saved
-                formset.save()
+                validate_station_schedule(final_slots, locked_member_ids=locked_member_ids)
+                with station_schedule_context(final_slots, locked_member_ids=locked_member_ids):
+                    saved = form.save(commit=False)
+                    saved.event = event
+                    saved.save()
+                    formset.instance = saved
+                    formset.save()
         except ValidationError as error:
             for text in _form_error_messages(error):
                 form.add_error(None, text)
@@ -468,6 +493,7 @@ def assignment_board(request, event_id=None):
             "selected_day": selected_day,
             "registrations": registrations,
             "slots": slots,
+            "schedule_conflicts": event_assignment_conflicts(event) if event else [],
             "birthday_alerts": birthday_alerts_for_event(event) if event else [],
         },
     )

@@ -30,6 +30,7 @@ from .forms_family import (
     configure_snack_fields,
     normalize_meal_payment,
 )
+from .forms_scheduling import ScheduleValidatedInlineFormSet
 from .meal_catalogue import menu_options_for_day
 from .models import (
     Assignment,
@@ -218,6 +219,7 @@ StationSlotFormSet = inlineformset_factory(
     Station,
     StationSlot,
     form=StationSlotForm,
+    formset=ScheduleValidatedInlineFormSet,
     fields=("event_day", "period", "capacity", "start_time", "end_time"),
     extra=1,
     can_delete=True,

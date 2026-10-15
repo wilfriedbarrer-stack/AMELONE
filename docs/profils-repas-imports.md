@@ -1,93 +1,158 @@
-# Profils d’événements, restauration et récapitulatifs
+# Modèles d’événements, restauration et récapitulatifs
 
-Dans **Administration**, chaque événement propose : **Enregistrer le profil
-réutilisable**, **Importer des menus**, **Importer des boissons**, **Récapitulatif
-des postes** et **Récapitulatif des repas**.
+## Retrouver les outils
 
-## Réutiliser un événement
+**Accueil gestion** présente les événements et le lien **Suivi annuel**.
+**Événements** réunit les événements actifs, les archives et les
+**Modèles d’événements**. **Catalogue** contient les menus et boissons communs.
+**Réglages** rassemble le logo, le règlement de l’association et les comptes.
+Les familles et les fonctions des personnes se gèrent dans **Familles**.
 
-Ouvrir **Administration → Profils d’événements → Créer un profil d’événement**.
-Renseigner son nom, son lieu et ses consignes, puis ajouter les postes. Pour
-chaque poste, définir sa catégorie, sa règle d’âge et ses créneaux : matin,
-après-midi ou journée, capacité et horaires facultatifs. Le profil se prépare
-sans créer d’événement daté. La liste permet de modifier ensuite ses informations,
-ses postes et ses créneaux.
+Dans un événement, les quatre espaces **Participants**, **Postes**,
+**Restauration** et **Paiements** restent accessibles depuis la même navigation.
+**Autres actions** donne accès aux messages aux participants, à la modification,
+à la duplication, à **Enregistrer comme modèle**, puis à la suppression ou
+l’archivage. Le lien vers le planning public n’apparaît que pour un événement
+publié.
 
-Dans **Créer un événement**, choisir le profil, saisir le nom et la date, puis
-cliquer **Créer depuis ce profil**. Les postes et leurs réglages sont copiés dans
-un nouveau brouillon. Modifier ensuite le modèle n’altère pas cet événement.
+## Préparer un modèle et créer un événement
 
-Il reste possible d’enregistrer un profil depuis un événement configuré : ses
-menus et boissons sont alors conservés en plus des postes. Les échéances
-d’inscription et de restauration se décalent avec la nouvelle date, en heure de
-Paris. Pour un profil créé directement, les valeurs initiales sont une ouverture
-à J−30 à 9 h, une clôture à J−1 à 18 h et une clôture des repas à J−1 à 12 h.
-Vérifier et ajuster ces échéances dans le brouillon avant publication.
-Aucun participant, affectation, paiement ou repas réservé n’est copié.
+Ouvrir **Événements → Modèles d’événements → Créer un modèle d’événement**.
+Renseigner son nom, son lieu et ses consignes, puis ajouter les postes. La
+**Note interne (facultative)** sert à retrouver le modèle ; la **Présentation
+publique proposée pour les événements** sera reprise sur les futurs événements.
 
-La création et la modification utilisent **Date de l’événement** dans le
-formulaire général. Les dates multiples des événements anciens sont conservées.
-Une date ayant déjà des inscriptions ne peut pas être déplacée : créer un nouvel
-événement depuis son profil.
+Pour chaque poste, définir sa catégorie, sa règle d’âge et ses créneaux : matin,
+après-midi ou journée, capacité et horaires facultatifs. Un modèle se prépare
+sans créer d’événement daté. Lorsque sa journée est unique, elle est renseignée
+automatiquement dans les créneaux ; le sélecteur reste présent pour plusieurs
+jours. La validation des jours, périodes et horaires reste appliquée.
 
-## Présence, repas et paiement
+**Créer un événement** utilise un seul formulaire. Choisir le modèle ou
+**Événement vierge — sans modèle**, renseigner le nom et la date, puis cliquer
+**Créer l’événement**. Avec un modèle, les postes et leurs réglages sont copiés
+dans un nouveau brouillon ; les champs propres à la création vierge sont masqués.
+Modifier ensuite le modèle ne change pas les événements existants.
 
-Le participant choisit dans le même formulaire sa présence, son poste souhaité,
-son repas ou sa collation, sa boisson et son paiement souhaité :
+Pour un événement vierge, compléter le lieu et les trois échéances obligatoires
+dans **Inscriptions et échéances**, puis les réglages de restauration et le statut.
+Le formulaire conserve les valeurs saisies en cas d’erreur. Dans un événement
+existant, les échéances sont regroupées dans un volet qui s’ouvre en cas d’erreur.
 
-- journée complète : menus de type **repas complet**, avec choix facultatifs
-  d’une collation le matin et d’une collation l’après-midi, chacune avec sa boisson
-  facultative : chaude le matin, fraîche l’après-midi ;
-- matin ou après-midi : menus de type **collation**, avec une boisson facultative
-  chaude le matin ou fraîche l’après-midi ;
-- possibilité explicite de ne demander ni repas ni collation ;
-- paiement au comptoir ou via lien SumUp.
+Il reste possible d’enregistrer un modèle depuis un événement configuré avec
+**Autres actions → Enregistrer comme modèle** : ses menus et boissons locaux sont
+alors conservés en plus des postes. Les échéances d’inscription et de restauration
+se décalent avec la nouvelle date, en heure de Paris. Pour un modèle créé
+directement, les valeurs initiales sont une ouverture à J−30 à 9 h, une clôture à
+J−1 à 18 h et une clôture des repas à J−1 à 12 h. Vérifier et ajuster ces échéances
+dans le brouillon avant publication. Aucun participant, affectation, paiement ou
+repas réservé n’est copié.
 
-Le lien SumUp se configure une seule fois dans **Administration → Règlement de
-l’association**. Les anciens liens d’événement servent de secours si le lien
-commun n’est pas renseigné. Choisir SumUp ou suivre un lien ne confirme aucun
-règlement reçu ; l’organisateur enregistre les paiements comme auparavant.
+La **Date de l’événement** est verrouillée dès qu’il existe des inscriptions.
+Pour changer de date, créer un nouvel événement depuis un modèle. Les dates
+multiples des événements anciens sont conservées. Une journée unique ne demande
+pas de sélectionner une nouvelle fois cette même date dans le planning.
 
-Les choix existants et leurs suppléments sont conservés. Modifier les tarifs ne
-recalcule pas les réservations précédentes. Un menu déjà réservé ne peut changer
-de type si cela rend les réservations actives incompatibles.
-Les officiels ne paient aucun supplément, y compris pour ces deux collations
-et la boisson, lorsqu’ils ne sont pas inscrits sur un poste bénévole ce jour-là.
-Un poste bénévole actif, même en brouillon ou combiné avec un poste officiel,
-rétablit les tarifs réservés pour cette journée. Sans affectation active, le poste
-souhaité est pris en compte. Le changement de poste actualise les suppléments et
-le solde ; les paiements déjà enregistrés et l’historique restent conservés.
-Les collations supplémentaires ne sont proposées qu’à la journée.
+**Supprimer ou archiver** ouvre une confirmation. Un événement avec historique
+est archivé ; les inscriptions, affectations, repas et paiements sont conservés.
+Supprimer un modèle ne supprime pas les événements déjà créés à partir de lui.
 
-Dans **Modifier l’événement**, les deux cases **Proposer une boisson chaude avec
-la collation du matin** et **Proposer une boisson fraîche avec la collation de
-l’après-midi** permettent d’activer ou de désactiver ces choix indépendamment.
-Le participant peut toujours choisir **Sans boisson**. Une désactivation conserve
-les choix déjà réservés et leurs tarifs ; elle empêche les nouvelles réservations
-de cette boisson. Les profils réutilisables et la duplication conservent ces réglages.
+## Membres, fonction d’officiel et horaires
+
+La fiche famille réunit **Responsable**, **Membres** et **Droits du compte**.
+Modifier les coordonnées du responsable depuis cette fiche : les autres écrans
+renvoient vers ce même éditeur. Les coordonnées d’un compte sans famille associée
+restent modifiables dans **Réglages → Comptes et droits**.
+
+L’administrateur attribue **Officiel de compétition** dans la fiche de chaque
+**membre**, et non dans les droits du compte. La fonction est individuelle,
+cumulable avec les droits administrateur, et ne donne pas de droits de gestion.
+Les autres membres d’une famille ne sont pas habilités automatiquement. Les
+postes officiels rappellent **Licence et formation à jour nécessaires**.
+Les dates de naissance et les âges restent privés ; ils servent notamment à
+vérifier les règles d’âge des postes.
+
+Pour un même membre, les chevauchements d’horaires sont bloqués à l’affectation
+et lors d’une modification des horaires des postes, y compris entre deux
+événements à la même date. Ce contrôle ne modifie pas automatiquement les
+affectations existantes : l’organisation corrige explicitement les créneaux
+concernés. Modifier un modèle ne réorganise pas les événements déjà créés.
+Les événements archivés sont exclus du contrôle. Une réactivation conserve
+l’historique et avertit des conflits éventuels ; les corriger dans **Postes →
+Gérer les affectations** avant de confirmer à nouveau.
+
+L’administrateur peut ouvrir **Mon compte → Ma participation**, ou **M’inscrire
+à cet événement**, pour renseigner sa présence et choisir ses propres postes.
+Les mêmes règles de capacité, habilitation, âge, période et horaires s’appliquent.
+
+## Présence, repas et paiement souhaité
+
+La présence et la restauration se remplissent dans le même formulaire. Les choix
+sont regroupés par moment et récapitulés avec leur montant avant enregistrement :
+
+- journée complète : **Matin**, **Midi**, **Après-midi** ; menu de type repas
+  complet et boisson du repas, avec une collation facultative le matin et une
+  autre l’après-midi, chacune avec sa boisson facultative ;
+- matin ou après-midi : une seule collation et sa boisson facultative, chaude
+  le matin ou fraîche l’après-midi ;
+- possibilité de ne demander ni repas ni collation, ou de choisir **Sans boisson** ;
+- paiement souhaité au comptoir ou via lien SumUp si un montant est dû.
+
+Une réservation à la journée peut donc comporter six composants distincts :
+repas, boisson du repas, collation du matin, boisson chaude du matin, collation
+de l’après-midi et boisson fraîche de l’après-midi. Les collations et boissons
+restent facultatives ; une boisson supplémentaire accompagne sa collation.
+La remarque pour l’organisation se trouve dans un volet facultatif.
+
+Le lien SumUp commun se configure dans **Réglages → Règlement**. Les anciens
+liens d’événement servent de secours si le lien commun n’est pas renseigné.
+Choisir SumUp ou suivre un lien ne confirme aucun règlement reçu.
+
+Les choix et suppléments réservés sont conservés. Modifier le catalogue ne
+recalcule pas les réservations précédentes. Un menu réservé ne peut changer de
+type si cela rend les réservations actives incompatibles.
+
+Un membre habilité officiel ne paie aucun supplément sur les six composants
+lorsqu’il n’est pas inscrit sur un poste bénévole ce jour-là. Toute affectation
+bénévole active, même en brouillon ou combinée avec un poste officiel, rétablit
+les tarifs bénévoles réservés pour cette journée. Sans affectation active, le
+poste souhaité est pris en compte. Les changements de poste ou d’habilitation
+actualisent les suppléments des réservations actives d’aujourd’hui et à venir.
+Les réservations passées, annulées ou archivées et les paiements déjà enregistrés
+restent conservés ; un éventuel trop-perçu reste visible.
+
+Dans **Autres actions → Modifier les informations**, les cases **Proposer une
+boisson chaude avec la collation du matin** et **Proposer une boisson fraîche avec
+la collation de l’après-midi** activent ces offres séparément. Une désactivation
+empêche les nouveaux choix mais conserve les boissons déjà réservées et leurs
+tarifs. Les modèles réutilisables et la duplication conservent ces réglages.
 
 ## Catalogue commun à tous les événements
 
-Ouvrir **Administration → Menus et boissons** pour créer, modifier ou désactiver
-les repas, collations et boissons communs. Les choix actifs sont proposés
-automatiquement sur tous les événements, y compris ceux déjà créés. Les tarifs
-enregistrés sur les réservations antérieures restent conservés.
+Ouvrir **Catalogue** pour créer, modifier, importer ou désactiver les repas,
+collations et boissons communs. Les choix actifs sont proposés automatiquement
+sur tous les événements, y compris ceux déjà créés. Les réservations antérieures
+gardent leurs montants enregistrés.
 
-Pour chaque boisson, renseigner **Chaude** ou **Fraîche**. Les anciennes boissons
-sont conservées avec la catégorie **À classer** : les modifier dans ce catalogue
-pour les proposer avec les collations. Elles restent proposées avec le repas
-principal et leurs réservations existantes sont conservées.
+La recherche et les filtres **État** et **Boissons** permettent de retrouver une
+option, y compris inactive ou à classer. Les descriptions sont accessibles dans
+un volet ; les choix se présentent par repas complets, collations et boissons.
 
-Les anciennes options propres à une date restent disponibles pour cette date.
-Pour les proposer partout, utiliser **Rendre commun** et confirmer : les choix
-déjà réservés sont conservés. Un conflit de nom est signalé avant validation.
-Une désactivation retire l’option des nouveaux choix sans supprimer les commandes.
+Pour une boisson, renseigner **Chaude** ou **Fraîche**. Les anciennes boissons
+restent **À classer** jusqu’à leur modification : elles sont disponibles avec le
+repas principal et conservent leurs réservations, mais doivent être classées pour
+être proposées avec les collations.
 
-Les boissons déjà présentes ont été regroupées dans ce catalogue commun : une
-offre par boisson est proposée sur toutes les dates. Les copies locales identiques
-restent désactivées pour préserver les anciennes réservations, leurs références
-et leurs tarifs. Les profils d’événements utilisent aussi cette offre commune
-sans reproposer leurs anciennes copies identiques.
+Les anciennes options locales restent accessibles dans **Anciennes exceptions
+propres aux événements**. Pour les proposer partout, utiliser **Rendre commun**
+et confirmer. Les références des réservations sont conservées ; un conflit de
+nom est signalé avant validation. Une désactivation retire l’option des nouveaux
+choix sans supprimer les commandes.
+
+Les boissons déjà présentes ont été regroupées dans ce catalogue commun. Les
+copies locales identiques restent désactivées pour préserver les anciennes
+réservations et leurs tarifs. Les modèles utilisent aussi cette offre commune
+sans reproposer les anciennes copies identiques.
 
 ## Importer des menus ou boissons
 
@@ -117,45 +182,72 @@ complet. Les valeurs `full_meal` et `snack` sont également acceptées.
 Pour les boissons, `temperature` est facultative et accepte `chaude`, `fraîche`
 ou `à classer` (également `hot`, `cold`, `unspecified`). Une colonne absente ou vide
 conserve la catégorie d’une boisson existante ; une nouvelle boisson reste à classer.
-Les noms sont
-uniques par date pour l’import local. Dans le catalogue commun, les menus sont
+Les noms sont uniques par date pour l’import local. Dans le catalogue commun, les menus sont
 identifiés par leur nom et leur type, les boissons par leur nom : un choix
-existant sera mis à jour seulement après confirmation
-explicite. L’aperçu affiche toutes les lignes et erreurs ; l’import n’applique
+existant sera mis à jour seulement après confirmation explicite. L’aperçu affiche toutes les lignes et erreurs ; l’import n’applique
 aucun changement si une ligne est invalide. Un aperçu expire après 15 minutes et
 ne peut être confirmé deux fois. Aucune réservation n’est supprimée.
 
-## Récapitulatifs séparés
+## Espaces de l’événement et récapitulatifs
 
-**Postes** : participants, date, présence, poste, période (journée, matin,
-après-midi) et état de l’affectation. Les participants non affectés sont inclus.
+**Participants** rassemble les inscriptions. **Postes** réunit les postes,
+leurs capacités, la gestion des affectations et le **Récapitulatif des postes**.
+Ce rapport indique le participant, sa présence, la date, le poste, la période et
+l’état de l’affectation ; les participants non affectés sont inclus.
 
-**Repas** : présence, formule, menu, collations du matin et de l’après-midi,
-boisson, mode de paiement souhaité et
-supplément par participant, puis les quantités à préparer. Les absences de choix
-et les refus de repas sont distincts. L’organisateur peut renseigner un choix
-manquant depuis ce rapport.
+**Restauration** regroupe trois vues sur une seule page de travail :
 
-Les deux rapports disposent de leur export CSV et d’une vue imprimable. Ils sont
-réservés aux organisateurs ; aucun récapitulatif nominatif de repas n’est public.
+- **Participants** : les choix individuels regroupés en repas, matin et
+  après-midi, le montant de la réservation et un accès à sa modification ;
+- **Quantités à préparer** : menus et boissons comptés séparément selon le
+  moment de distribution ;
+- **Tickets · 6 par A4** : tickets nominatifs imprimables.
+
+Les refus de repas et les choix non renseignés restent distincts. Les boissons
+et collations sont regroupées à l’écran, mais **Exporter les choix complets**
+conserve les colonnes séparées et tous les montants. Un événement à date unique affiche
+cette date dans l’en-tête plutôt que dans une colonne répétée.
+Les réglages et anciennes exceptions de restauration sont dans un volet dédié ;
+les nouveaux imports communs se font dans **Catalogue**.
+
+Les récapitulatifs des postes et de la restauration restent distincts,
+exportables en CSV et imprimables. Ils sont réservés à l’organisation : aucun
+récapitulatif nominatif de repas n’est public.
+
+## Paiements par famille
+
+**Paiements** affiche, pour chaque famille et tout l’événement, le **Montant dû**,
+le **Déjà réglé**, le **Reste à régler** et l’état : à régler, partiellement réglée,
+soldée ou trop-perçu. Un trop-perçu est affiché séparément du reste à régler.
+Les soldes additionnent les montants enregistrés des réservations actives et
+retirent uniquement les paiements reçus.
+
+**Encaisser** préremplit la famille et le reste à régler. Le montant est
+modifiable pour un paiement partiel. Enregistrer uniquement le montant réellement
+reçu au comptoir ou via SumUp. La date et l’heure actuelles sont proposées ; les
+précisions restent disponibles dans **Détails facultatifs**.
+L’historique des paiements est conservé.
 
 ## Tickets nominatifs : six par feuille A4
 
-Dans un événement, ouvrir **Tickets repas**. Choisir éventuellement une date
-ou une personne, puis **Imprimer les tickets**. Le navigateur permet aussi
-d’enregistrer un PDF : choisir A4, portrait, échelle 100 % et désactiver ses
+Ouvrir **Événement → Restauration → Tickets · 6 par A4**, filtrer éventuellement
+par date ou personne, puis cliquer **Imprimer les tickets**. Le navigateur permet
+aussi d’enregistrer un PDF : choisir A4, portrait, échelle 100 % et désactiver ses
 en-têtes et pieds de page.
 
-Chaque ticket indique le nom du participant, l’événement, la date, le repas
-ou la collation, les deux collations facultatives et la boisson choisis.
-Le logo de l’association apparaît sur chaque ticket. La mention **Note famille
-soldée** ou **Note famille non soldée** reprend le solde de la famille pour tout
-l’événement, même si l’impression est filtrée par date ou participant. Elle est
-recalculée à chaque consultation et réimpression depuis les paiements enregistrés.
-Le montant restant est affiché uniquement pour une note non soldée. Ce montant
-familial est commun aux tickets d’une même famille : il ne faut pas les additionner.
-Une note sans supplément est soldée ; le choix d’un mode de paiement ne vaut pas
-enregistrement d’un règlement.
-Les inscriptions annulées et les personnes sans repas ne produisent pas de ticket.
-Six emplacements sont disposés sur chaque feuille, avec des emplacements vides
-sur la dernière si nécessaire. L’impression ne modifie ni réservation ni paiement.
+Chaque ticket indique le participant, l’événement, la date, le logo et tous les
+choix réservés : repas ou collation principale, sa boisson et, à la journée, les
+collations du matin et de l’après-midi avec leurs boissons éventuelles.
+
+**Note famille soldée** ou **Note famille non soldée** utilise le solde de la
+famille pour tout l’événement, même si l’impression est filtrée par date ou
+participant. Ce statut est recalculé à la consultation et à la réimpression à
+partir des paiements reçus. Le montant restant s’affiche uniquement si la note
+n’est pas soldée. Ce montant familial est commun aux tickets d’une même famille :
+il ne faut pas les additionner.
+
+Une note sans supplément est soldée. La préférence de paiement ne vaut pas
+règlement. Les inscriptions annulées et les personnes sans repas ne produisent
+pas de ticket. Six emplacements sont disposés par feuille, avec des emplacements
+vides sur la dernière si nécessaire. L’impression ne modifie aucune réservation
+ni aucun paiement.
