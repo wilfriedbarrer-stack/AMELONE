@@ -269,6 +269,8 @@ class OfficialVolunteerPricingFormsTests(DataMixin, TestCase):
         form = FamilyRegistrationForm(event_day=self.day, member=self.member, registration=registration)
         for component in MealOrder.PRICE_COMPONENTS:
             option = getattr(order, component)
+            if option is None:
+                continue
             expected = getattr(order, f"{component}_surcharge_cents")
             entry = next(item for item in form.official_pricing_data["option_prices"][component]
                          if item["id"] == str(option.pk))

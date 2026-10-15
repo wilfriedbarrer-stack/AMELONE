@@ -2,14 +2,17 @@
 .ticket-summary p { max-width: 37rem; margin: 0; }
 .meal-ticket-sheets { display: grid; justify-content: center; gap: 2rem; min-width: 0; }
 .meal-ticket-sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); width: 190mm; height: 277mm; background: #fff; box-shadow: var(--shadow-md); }
-.meal-ticket { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 3mm; border: .2mm dashed #8b958c; color: #172d1b; background: #fff; font-size: 9pt; line-height: 1.2; overflow-wrap: anywhere; break-inside: avoid; }
+.meal-ticket { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 2mm; border: .2mm dashed #8b958c; color: #172d1b; background: #fff; font-size: 9pt; line-height: 1.08; overflow-wrap: anywhere; break-inside: avoid; }
+.meal-ticket > * { flex-shrink: 0; }
+.meal-ticket-heading { display: flex; align-items: start; gap: 1.5mm; }
+.meal-ticket-heading-copy { flex: 1; min-width: 0; }
 .meal-ticket-brand { display: flex; align-items: center; justify-content: space-between; gap: 1.5mm; padding-bottom: .7mm; border-bottom: .3mm solid #12651c; color: #12651c; font-size: 8pt; font-weight: 800; letter-spacing: .04em; }
 .meal-ticket-logo { width: 10mm; height: 10mm; flex: 0 0 10mm; object-fit: contain; }
 .meal-ticket-brand span { font-weight: 500; letter-spacing: 0; }
 .meal-ticket-event { display: grid; gap: .3mm; margin-top: 1mm; font-size: 8pt; }
 .meal-ticket-event span { color: #49574b; }
-.meal-ticket-name { margin: 1.5mm 0; color: #172d1b; font: 800 12.5pt/1.12 Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: -.02em; overflow-wrap: anywhere; }
-.meal-ticket-choices { display: grid; gap: .8mm; margin: 0; }
+.meal-ticket-name { margin: 1mm 0; color: #172d1b; font: 800 11.5pt/1.08 Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.meal-ticket-choices { display: grid; gap: .5mm; margin: 0; }
 .meal-ticket-choices div { min-width: 0; }
 .meal-ticket-choices dt { display: inline; margin: 0; color: #49574b; font-size: 7.5pt; font-weight: 600; }
 .meal-ticket-choices dt::after { content: " : "; }

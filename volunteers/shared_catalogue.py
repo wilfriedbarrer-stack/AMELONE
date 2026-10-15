@@ -88,6 +88,8 @@ def save_shared_option(*, kind, data, actor, option_id=None, version=None):
         raise ValidationError("Le prix est invalide.") from error
     if isinstance(option, Menu):
         option.meal_type = data["meal_type"]
+    else:
+        option.temperature = data.get("temperature") or option.temperature
     _check_global_conflict(option)
     option.full_clean()
     option.save()

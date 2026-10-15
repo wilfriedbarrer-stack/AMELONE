@@ -233,6 +233,8 @@ def event_duplicate(request, event_id):
                 registration_opens_at=source.registration_opens_at,
                 registration_closes_at=source.registration_closes_at,
                 meal_orders_close_at=source.meal_orders_close_at,
+                morning_hot_beverage_enabled=source.morning_hot_beverage_enabled,
+                afternoon_cold_beverage_enabled=source.afternoon_cold_beverage_enabled,
                 sumup_payment_url=source.sumup_payment_url,
                 general_instructions=source.general_instructions,
                 status=Event.Status.DRAFT,
@@ -278,6 +280,7 @@ def event_duplicate(request, event_id):
                             name=drink.name,
                             description=drink.description,
                             surcharge_cents=drink.surcharge_cents,
+                            temperature=drink.temperature,
                             is_active=drink.is_active,
                         )
         messages.success(request, "L'événement a été dupliqué en brouillon.")
@@ -608,6 +611,20 @@ def event_emails(request, event_id):
     )
 
 
+def _beverage_preparation_choices(order):
+    """Keep the three service periods distinct, including historical choices."""
+    availability = order.beverage_choice_availability
+    main_label = {
+        Registration.Availability.MORNING: "Boisson — collation matin",
+        Registration.Availability.AFTERNOON: "Boisson — collation après-midi",
+    }.get(availability, "Boisson — repas")
+    return (
+        (order.beverage, main_label),
+        (order.morning_beverage, "Boisson — collation matin"),
+        (order.afternoon_beverage, "Boisson — collation après-midi"),
+    )
+
+
 @organizer_required
 def catering(request, event_id):
     event = get_object_or_404(Event.objects.prefetch_related("days__menus", "days__beverages"), pk=event_id)
@@ -615,7 +632,7 @@ def catering(request, event_id):
         registration__event_day__event=event, registration__status=Registration.Status.ACTIVE,
     ).select_related(
         "registration__member__family", "registration__event_day", "menu", "beverage",
-        "morning_snack", "afternoon_snack",
+        "morning_snack", "afternoon_snack", "morning_beverage", "afternoon_beverage",
     )
     menu_quantities, drink_quantities = Counter(), Counter()
     for order in orders:
@@ -630,15 +647,16 @@ def catering(request, event_id):
         for food, label in foods:
             if food:
                 menu_quantities[(day_date, label, food.name)] += 1
-        if order.beverage:
-            drink_quantities[(day_date, order.beverage.name)] += 1
+        for beverage, label in _beverage_preparation_choices(order):
+            if beverage:
+                drink_quantities[(day_date, label, beverage.name)] += 1
     menu_totals = [
         {"date": date, "type": label, "name": name, "quantity": count}
         for (date, label, name), count in sorted(menu_quantities.items())
     ]
     beverage_totals = [
-        {"date": date, "name": name, "quantity": count}
-        for (date, name), count in sorted(drink_quantities.items())
+        {"date": date, "type": label, "name": name, "quantity": count}
+        for (date, label, name), count in sorted(drink_quantities.items())
     ]
     for day in event.days.all():
         day.offered_menus = menu_options_for_day(day, active_only=False)
@@ -706,6 +724,8 @@ def meal_order_update(request, order_id):
                 beverage=form.cleaned_data["beverage"],
                 morning_snack=form.cleaned_data.get("morning_snack"),
                 afternoon_snack=form.cleaned_data.get("afternoon_snack"),
+                morning_beverage=form.cleaned_data.get("morning_beverage"),
+                afternoon_beverage=form.cleaned_data.get("afternoon_beverage"),
                 no_meal=not form.cleaned_data["wants_meal"],
                 payment_method=form.cleaned_data["payment_method"],
                 actor=request.user,
@@ -730,12 +750,12 @@ def catering_export(request, event_id):
     response["Content-Disposition"] = f'attachment; filename="repas-{event.pk}.csv"'
     response.write("\ufeff")
     writer = csv.writer(response, delimiter=";")
-    writer.writerow(["Date", "Famille", "Membre", "Menu", "Boisson", "Collation matin", "Collation après-midi", "Supplément (€)"])
+    writer.writerow(["Date", "Famille", "Membre", "Menu", "Boisson", "Collation matin", "Boisson chaude matin", "Collation après-midi", "Boisson fraîche après-midi", "Supplément (€)"])
     orders = MealOrder.objects.filter(
         registration__event_day__event=event, registration__status=Registration.Status.ACTIVE,
     ).select_related(
         "registration__event_day", "registration__member__family", "menu", "beverage",
-        "morning_snack", "afternoon_snack",
+        "morning_snack", "afternoon_snack", "morning_beverage", "afternoon_beverage",
     )
     for order in orders:
         writer.writerow(
@@ -746,7 +766,9 @@ def catering_export(request, event_id):
                 order.menu.name if order.menu else "Pas de repas",
                 order.beverage.name if order.beverage else "",
                 order.morning_snack.name if order.morning_snack else "",
+                order.morning_beverage.name if order.morning_beverage else "",
                 order.afternoon_snack.name if order.afternoon_snack else "",
+                order.afternoon_beverage.name if order.afternoon_beverage else "",
                 f"{order.total_surcharge_cents / 100:.2f}".replace(".", ","),
             ]
         )
@@ -924,6 +946,8 @@ def meal_order_create(request, registration_id):
                 beverage=form.cleaned_data["beverage"],
                 morning_snack=form.cleaned_data.get("morning_snack"),
                 afternoon_snack=form.cleaned_data.get("afternoon_snack"),
+                morning_beverage=form.cleaned_data.get("morning_beverage"),
+                afternoon_beverage=form.cleaned_data.get("afternoon_beverage"),
                 no_meal=not form.cleaned_data["wants_meal"],
                 payment_method=form.cleaned_data["payment_method"], actor=request.user,
             )

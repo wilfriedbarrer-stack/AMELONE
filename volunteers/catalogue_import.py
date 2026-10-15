@@ -29,6 +29,11 @@ MEAL_TYPES = {
     "snack": "snack",
     "collation": "snack",
 }
+BEVERAGE_TEMPERATURES = {
+    "hot": "hot", "chaude": "hot", "chaud": "hot",
+    "cold": "cold", "fraiche": "cold", "frais": "cold", "froide": "cold", "froid": "cold",
+    "unspecified": "unspecified", "a classer": "unspecified", "non precisee": "unspecified",
+}
 
 
 @dataclass
@@ -171,6 +176,8 @@ def parse_catalogue_upload(upload, kind, *, identity_by_type=False):
         allowed = {"nom", "description", "supplement_euros"}
         if kind == "menus":
             allowed.add("type")
+        else:
+            allowed.add("temperature")
         if header_formula or len(headers) > 20 or "nom" not in headers:
             raise ValidationError("La première ligne doit contenir les titres de colonnes, dont « nom ».")
         if len(set(headers)) != len(headers) or set(headers) - allowed:
@@ -213,6 +220,12 @@ def parse_catalogue_upload(upload, kind, *, identity_by_type=False):
                     row["errors"].append("Le type doit être « repas » ou « collation ».")
                 else:
                     row["meal_type"] = MEAL_TYPES[meal_type]
+            elif "temperature" in data and str(data["temperature"] or "").strip():
+                temperature = _normalize_header(data["temperature"])
+                if temperature not in BEVERAGE_TEMPERATURES:
+                    row["errors"].append("La température doit être « chaude », « fraîche » ou « à classer ».")
+                else:
+                    row["temperature"] = BEVERAGE_TEMPERATURES[temperature]
             identity = (
                 (row["name"].casefold(), row["meal_type"])
                 if identity_by_type and kind == "menus" else row["name"].casefold()
@@ -247,6 +260,8 @@ def _fingerprint(option):
     }
     if isinstance(option, Menu):
         state["meal_type"] = option.meal_type
+    else:
+        state["temperature"] = option.temperature
     return hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest()
 
 
@@ -298,6 +313,8 @@ def _option_from_row(row, day, kind, existing=None):
     option.surcharge_cents = row["surcharge_cents"]
     if kind == "menus":
         option.meal_type = row["meal_type"]
+    elif "temperature" in row:
+        option.temperature = row["temperature"]
     return option
 
 

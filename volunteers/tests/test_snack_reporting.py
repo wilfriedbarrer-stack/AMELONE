@@ -70,7 +70,7 @@ class SnackReportingTests(DataMixin, TestCase):
         # collation conservée, donc son type seul autoriserait la demi-journée.
         Menu.objects.filter(pk=self.menu.pk).update(meal_type=Menu.MealType.SNACK)
         MealOrder.objects.filter(pk=order.pk).update(legacy_availability="legacy")
-        with self.assertRaisesMessage(BusinessRuleError, "collations ensemble"):
+        with self.assertRaisesMessage(BusinessRuleError, "les collations et les boissons ensemble"):
             save_participation(
                 member=self.member, event_day=self.day,
                 availability=Registration.Availability.MORNING, actor=self.family_user,

@@ -36,6 +36,20 @@ def _metadata(*, name, description, event_description, location, general_instruc
     }
 
 
+def _beverage_settings(morning_hot_beverage_enabled, afternoon_cold_beverage_enabled, *, previous=None):
+    settings = {}
+    previous = previous or {}
+    for name, value in (
+        ("morning_hot_beverage_enabled", morning_hot_beverage_enabled),
+        ("afternoon_cold_beverage_enabled", afternoon_cold_beverage_enabled),
+    ):
+        value = previous.get(name, True) if value is None else value
+        if type(value) is not bool:
+            raise ValidationError({name: "Renseignez un réglage d’activation valide."})
+        settings[name] = value
+    return settings
+
+
 def _snapshot(profile):
     snapshot = deepcopy(profile.snapshot)
     if (
@@ -93,7 +107,8 @@ def _save(profile):
 
 @transaction.atomic
 def create_reusable_profile(*, name, description="", event_description="", location="",
-                            general_instructions=""):
+                            general_instructions="", morning_hot_beverage_enabled=True,
+                            afternoon_cold_beverage_enabled=True):
     """Crée un modèle d'une journée, sans événement daté ni données familiales."""
 
     data = _metadata(
@@ -108,6 +123,7 @@ def create_reusable_profile(*, name, description="", event_description="", locat
             "location": data["location"],
             "general_instructions": data["general_instructions"],
             "sumup_payment_url": "",
+            **_beverage_settings(morning_hot_beverage_enabled, afternoon_cold_beverage_enabled),
         },
         "windows": {
             "registration_opens_at": -30 * 86400 + 9 * 3600,
@@ -122,7 +138,8 @@ def create_reusable_profile(*, name, description="", event_description="", locat
 
 @transaction.atomic
 def update_reusable_profile(*, profile, expected_updated_at, name, description,
-                            event_description, location, general_instructions):
+                            event_description, location, general_instructions,
+                            morning_hot_beverage_enabled=None, afternoon_cold_beverage_enabled=None):
     """Modifie les métadonnées sans remplacer jours, échéances ou catalogues."""
 
     current = _locked_profile(profile, expected_updated_at)
@@ -136,6 +153,8 @@ def update_reusable_profile(*, profile, expected_updated_at, name, description,
     snapshot["event"].update(
         description=data["event_description"], location=data["location"],
         general_instructions=data["general_instructions"],
+        **_beverage_settings(morning_hot_beverage_enabled, afternoon_cold_beverage_enabled,
+                             previous=snapshot["event"]),
     )
     current.snapshot = snapshot
     return _save(current)

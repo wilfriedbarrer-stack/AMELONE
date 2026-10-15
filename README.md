@@ -133,6 +133,10 @@ réservations existantes. Les imports CSV/Excel disposent d’un aperçu à conf
 Les présences et la restauration se remplissent ensemble : repas complet à la
 journée, avec collations facultatives du matin et de l’après-midi, collation à la
 demi-journée, boisson et préférence de paiement au comptoir ou via SumUp.
+Chaque collation peut aussi inclure une boisson facultative : chaude le matin,
+fraîche l’après-midi. Les deux offres s’activent séparément dans chaque événement.
+Le catalogue permet de classer les boissons par température ; les anciens choix
+et leurs tarifs restent conservés en cas de désactivation.
 Les officiels ne paient aucun supplément, collations comprises. Les tarifs déjà
 réservés restent conservés. Le lien commun se configure dans le règlement de l’association.
 Les postes acceptent désormais la période Journée.

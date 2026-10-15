@@ -271,6 +271,7 @@ def family_event_detail(request, event_id):
         .select_related(
             "member", "event_day", "preferred_station", "meal_order__menu",
             "meal_order__beverage", "meal_order__morning_snack", "meal_order__afternoon_snack",
+            "meal_order__morning_beverage", "meal_order__afternoon_beverage",
         )
         .order_by("event_day__date", "member__last_name", "member__first_name")
     )
@@ -340,6 +341,8 @@ def family_registration_edit(request, event_day_id, member_id):
                     "menu": form.cleaned_data["menu"], "beverage": form.cleaned_data["beverage"],
                     "morning_snack": form.cleaned_data.get("morning_snack"),
                     "afternoon_snack": form.cleaned_data.get("afternoon_snack"),
+                    "morning_beverage": form.cleaned_data.get("morning_beverage"),
+                    "afternoon_beverage": form.cleaned_data.get("afternoon_beverage"),
                     "no_meal": form.cleaned_data["no_meal"], "payment_method": form.cleaned_data["payment_method"],
                 } if form.meal_choices_open else None,
             )
@@ -434,6 +437,8 @@ def family_meal_edit(request, registration_id):
                 drink=form.cleaned_data["beverage"],
                 morning_snack=form.cleaned_data.get("morning_snack"),
                 afternoon_snack=form.cleaned_data.get("afternoon_snack"),
+                morning_beverage=form.cleaned_data.get("morning_beverage"),
+                afternoon_beverage=form.cleaned_data.get("afternoon_beverage"),
                 no_meal=form.cleaned_data["no_meal"],
                 payment_method=form.cleaned_data["payment_method"],
                 actor=request.user,

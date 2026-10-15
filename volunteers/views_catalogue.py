@@ -17,7 +17,7 @@ from .catalogue_import import (
 )
 from .forms_catalogue import CatalogueConfirmForm, CatalogueUploadForm
 from .models import Assignment, Event, EventDay, Registration
-from .views_organizer import organizer_required
+from .views_organizer import _beverage_preparation_choices, organizer_required
 
 PREVIEW_SESSION_KEY = "catalogue_import_preview"
 PREVIEW_SALT = "volunteers.catalogue-import"
@@ -148,8 +148,9 @@ def catalogue_template(request, kind):
         writer.writerow(["EXEMPLE - Repas végétarien", "Plat et dessert (à adapter)", "0,00", "repas"])
         writer.writerow(["EXEMPLE - Collation", "Fruit et biscuit (à adapter)", "0,00", "collation"])
     else:
-        writer.writerow(headers)
-        writer.writerow(["EXEMPLE - Eau", "Petite bouteille (à adapter)", "0,00"])
+        writer.writerow([*headers, "temperature"])
+        writer.writerow(["EXEMPLE - Eau", "Petite bouteille (à adapter)", "0,00", "fraîche"])
+        writer.writerow(["EXEMPLE - Café", "Tasse (à adapter)", "0,00", "chaude"])
     return response
 
 
@@ -157,6 +158,7 @@ def _event_registrations(event):
     return Registration.objects.filter(event_day__event=event, status=Registration.Status.ACTIVE).select_related(
         "event_day", "member__family__account", "meal_order__menu", "meal_order__beverage",
         "meal_order__morning_snack", "meal_order__afternoon_snack",
+        "meal_order__morning_beverage", "meal_order__afternoon_beverage",
     ).order_by("event_day__date", "member__last_name", "member__first_name")
 
 
@@ -238,6 +240,8 @@ def _meal_rows(event):
         beverage = order.beverage if has_meal else None
         morning_snack = order.morning_snack if has_meal else None
         afternoon_snack = order.afternoon_snack if has_meal else None
+        morning_beverage = order.morning_beverage if has_meal else None
+        afternoon_beverage = order.afternoon_beverage if has_meal else None
         formula = menu.get_meal_type_display() if menu else (
             "Repas complet" if registration.availability == Registration.Availability.FULL_DAY
             else "Collation"
@@ -256,6 +260,8 @@ def _meal_rows(event):
             "beverage": beverage.name if beverage else "—",
             "morning_snack_name": morning_snack.name if morning_snack else "—",
             "afternoon_snack_name": afternoon_snack.name if afternoon_snack else "—",
+            "morning_beverage_name": morning_beverage.name if morning_beverage else "—",
+            "afternoon_beverage_name": afternoon_beverage.name if afternoon_beverage else "—",
             "payment": payment,
             "surcharge_cents": order.total_surcharge_cents if has_meal else 0,
         })
@@ -264,8 +270,10 @@ def _meal_rows(event):
         for snack, label in ((morning_snack, "Collation matin"), (afternoon_snack, "Collation après-midi")):
             if snack:
                 quantities[(registration.event_day.date, label, snack.name)] += 1
-        if beverage:
-            beverage_quantities[(registration.event_day.date, beverage.name)] += 1
+        if has_meal:
+            for drink, label in _beverage_preparation_choices(order):
+                if drink:
+                    beverage_quantities[(registration.event_day.date, label, drink.name)] += 1
     return rows, quantities, beverage_quantities
 
 
@@ -281,7 +289,7 @@ def recap_meals(request, event_id):
         "no_meal_count": sum(row["choice"] == "Pas de repas" for row in rows),
         "missing_count": sum(row["choice"] == "Non renseigné" for row in rows),
         "quantities": [{"date": date, "type": meal_type, "name": name, "count": count} for (date, meal_type, name), count in sorted(quantities.items())],
-        "beverage_quantities": [{"date": date, "name": name, "count": count} for (date, name), count in sorted(beverage_quantities.items())],
+        "beverage_quantities": [{"date": date, "type": label, "name": name, "count": count} for (date, label, name), count in sorted(beverage_quantities.items())],
         "print_view": request.GET.get("print") == "1",
     })
 
@@ -292,7 +300,7 @@ def recap_meals_csv(request, event_id):
     rows, _, _ = _meal_rows(event)
     response = _csv_response("recapitulatif-repas-participants.csv")
     writer = csv.writer(response, delimiter=";")
-    writer.writerow(["Date", "Famille", "Participant", "Présence proposée", "Formule", "Choix repas", "Menu", "Boisson", "Collation matin", "Collation après-midi", "Paiement souhaité", "Supplément (€)"])
+    writer.writerow(["Date", "Famille", "Participant", "Présence proposée", "Formule", "Choix repas", "Menu", "Boisson", "Collation matin", "Boisson chaude matin", "Collation après-midi", "Boisson fraîche après-midi", "Paiement souhaité", "Supplément (€)"])
     for row in rows:
         registration = row["registration"]
         writer.writerow([_spreadsheet_safe(value) for value in [
@@ -301,7 +309,8 @@ def recap_meals_csv(request, event_id):
             registration.member.full_name,
             registration.get_availability_display(),
             row["formula"], row["choice"], row["menu"], row["beverage"],
-            row["morning_snack_name"], row["afternoon_snack_name"], row["payment"],
+            row["morning_snack_name"], row["morning_beverage_name"],
+            row["afternoon_snack_name"], row["afternoon_beverage_name"], row["payment"],
             f'{row["surcharge_cents"] / 100:.2f}'.replace(".", ","),
         ]])
     return response

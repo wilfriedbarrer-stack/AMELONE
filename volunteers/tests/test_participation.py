@@ -21,7 +21,7 @@ class ParticipationTests(DataMixin, TestCase):
         self.client.force_login(self.family_user)
         self.full = Menu.objects.create(event_day=self.day, name="Repas complet", meal_type=Menu.MealType.FULL_MEAL, surcharge_cents=350)
         self.snack = Menu.objects.create(event_day=self.day, name="Collation", meal_type=Menu.MealType.SNACK, surcharge_cents=100)
-        self.drink = Beverage.objects.create(event_day=self.day, name="Jus", surcharge_cents=50)
+        self.drink = Beverage.objects.create(event_day=self.day, name="Thé", temperature=Beverage.Temperature.HOT, surcharge_cents=50)
         self.url = reverse("family_registration_edit", args=[self.day.pk, self.member.pk])
 
     def post(self, availability="full_day", menu=None, **extra):

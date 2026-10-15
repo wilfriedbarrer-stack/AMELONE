@@ -323,7 +323,7 @@ class EventAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
         "registration_closes_at",
         "meal_orders_close_at",
     )
-    list_filter = ("status",)
+    list_filter = ("status", "morning_hot_beverage_enabled", "afternoon_cold_beverage_enabled")
     search_fields = ("name", "description", "location")
     date_hierarchy = "registration_opens_at"
     inlines = (EventDayInline, StationInline)
@@ -492,7 +492,12 @@ class PricedOptionAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
 
 
 admin.site.register(Menu, PricedOptionAdmin)
-admin.site.register(Beverage, PricedOptionAdmin)
+
+
+@admin.register(Beverage)
+class BeverageAdmin(PricedOptionAdmin):
+    list_display = ("name", "temperature", "event_day", "surcharge_cents", "is_active")
+    list_filter = ("temperature", *PricedOptionAdmin.list_filter)
 
 
 @admin.register(MealOrder)
@@ -503,7 +508,9 @@ class MealOrderAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
         "wants_meal",
         "menu",
         "morning_snack",
+        "morning_beverage",
         "afternoon_snack",
+        "afternoon_beverage",
         "beverage",
         "official_exemption_applied",
         "total_surcharge_cents",
@@ -514,14 +521,21 @@ class MealOrderAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
         "registration__member__last_name",
         "menu__name",
         "beverage__name",
+        "morning_beverage__name",
+        "afternoon_beverage__name",
     )
-    autocomplete_fields = ("registration", "menu", "morning_snack", "afternoon_snack", "beverage", "corrected_by")
+    autocomplete_fields = (
+        "registration", "menu", "morning_snack", "afternoon_snack", "beverage",
+        "morning_beverage", "afternoon_beverage", "corrected_by",
+    )
     readonly_fields = ReadOnlyTimestampsMixin.readonly_fields + (
         "official_exemption_applied",
-        "menu_surcharge_cents",
-        "beverage_surcharge_cents",
-        "morning_snack_surcharge_cents",
-        "afternoon_snack_surcharge_cents",
+        "beverage_availability",
+        *(
+            field
+            for component in MealOrder.PRICE_COMPONENTS
+            for field in (f"{component}_surcharge_cents", f"{component}_standard_surcharge_cents")
+        ),
         "total_surcharge_cents",
     )
 

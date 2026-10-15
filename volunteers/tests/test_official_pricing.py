@@ -275,7 +275,9 @@ class OfficialPricingTests(DataMixin, TestCase):
     def test_legacy_type_exception_and_prices_survive_grant_and_withdrawal(self):
         order = self.order()
         Registration.objects.filter(pk=self.reg.pk).update(availability=Registration.Availability.MORNING)
-        MealOrder.objects.filter(pk=order.pk).update(legacy_availability="morning")
+        MealOrder.objects.filter(pk=order.pk).update(
+            legacy_availability="morning", beverage_availability="morning",
+        )
         self.official()
         order = self.order()
         self.assertEqual(order.legacy_availability, "morning")
