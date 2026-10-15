@@ -503,9 +503,10 @@ class MealOrderAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
         "wants_meal",
         "menu",
         "beverage",
+        "official_exemption_applied",
         "total_surcharge_cents",
     )
-    list_filter = ("wants_meal", "registration__event_day__event", "registration__event_day__date")
+    list_filter = ("wants_meal", "official_exemption_applied", "registration__event_day__event", "registration__event_day__date")
     search_fields = (
         "registration__member__first_name",
         "registration__member__last_name",
@@ -514,6 +515,7 @@ class MealOrderAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
     )
     autocomplete_fields = ("registration", "menu", "beverage", "corrected_by")
     readonly_fields = ReadOnlyTimestampsMixin.readonly_fields + (
+        "official_exemption_applied",
         "menu_surcharge_cents",
         "beverage_surcharge_cents",
         "total_surcharge_cents",

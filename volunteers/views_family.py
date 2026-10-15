@@ -292,10 +292,11 @@ def family_event_detail(request, event_id):
             "registrations_by_member_and_day": registrations_by_member_and_day,
             "meal_orders": meal_orders,
             "balance": balance,
+            "has_payment_due": balance["amount_remaining_cents"] > 0,
             "registration_is_open": event.registration_is_open(),
             "registration_not_started": timezone.now() < event.registration_opens_at,
             "sumup_url": SiteBranding.objects.filter(pk=1).values_list("sumup_payment_url", flat=True).first() or event.sumup_payment_url or "",
-            "sumup_requested": any(order and order.payment_method == "sumup" for order in meal_orders.values()),
+            "sumup_requested": any(order and order.total_surcharge_cents > 0 and order.payment_method == "sumup" for order in meal_orders.values()),
             "meal_orders_are_open": event.meal_orders_are_open(),
         },
     )

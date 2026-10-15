@@ -22,6 +22,7 @@ from .forms_eligibility import (
     slot_choice_label,
     station_choice_label,
 )
+from .forms_family import configure_official_meal_pricing
 from .models import (
     Assignment,
     Attendance,
@@ -401,6 +402,10 @@ class MealOrderOrganizerForm(OrganizerFormMixin, forms.ModelForm):
             allowed |= Q(pk=self.instance.menu_id)
         self.fields["menu"].queryset = Menu.objects.filter(event_day=day).filter(allowed).order_by("name") if day else Menu.objects.none()
         self.fields["beverage"].queryset = Beverage.objects.filter(event_day=day).filter(Q(is_active=True) | Q(pk=self.instance.beverage_id)).order_by("name") if day else Beverage.objects.none()
+        configure_official_meal_pricing(
+            self, registration.member if registration else None,
+            self.instance if self.instance.pk and not self.instance._state.adding else None,
+        )
 
     def clean(self):
         cleaned = super().clean()

@@ -188,6 +188,8 @@ class Member(UUIDTimeStampedModel):
 
     @transaction.atomic
     def save(self, *args, **kwargs):
+        meal_orders = []
+        official_changed = False
         if not self._state.adding:
             previous = Member.objects.select_for_update(of=("self",)).filter(pk=self.pk).values(
                 "birth_date", "is_competition_official"
@@ -201,6 +203,9 @@ class Member(UUIDTimeStampedModel):
                 self.birth_date != previous["birth_date"]
                 or self.is_competition_official != previous["is_competition_official"]
             ):
+                official_changed = (
+                    self.is_competition_official != previous["is_competition_official"]
+                )
                 affected = Assignment.objects.filter(
                     registration__member_id=self.pk,
                     registration__event_day__date__gte=timezone.localdate(),
@@ -208,16 +213,39 @@ class Member(UUIDTimeStampedModel):
                 )
                 day_ids = list(affected.values_list("registration__event_day_id", flat=True))
                 slot_ids = list(affected.values_list("station_slot_id", flat=True))
+                meal_registrations = Registration.objects.filter(
+                    member_id=self.pk,
+                    status=Registration.Status.ACTIVE,
+                    event_day__date__gte=timezone.localdate(),
+                    meal_order__isnull=False,
+                ) if official_changed else Registration.objects.none()
+                meal_registration_ids = list(meal_registrations.values_list("pk", flat=True))
+                day_ids.extend(meal_registrations.values_list("event_day_id", flat=True))
                 # Deux adultes d'un même créneau ne peuvent pas devenir mineurs
                 # simultanément en se considérant chacun couvert par l'autre.
                 list(EventDay.objects.select_for_update(of=("self",)).filter(
                     pk__in=day_ids
+                ).order_by("pk"))
+                list(Registration.objects.select_for_update(of=("self",)).filter(
+                    pk__in=meal_registration_ids
+                ).order_by("pk"))
+                meal_orders = list(MealOrder.objects.select_for_update(of=("self",)).filter(
+                    registration_id__in=meal_registration_ids
                 ).order_by("pk"))
                 list(StationSlot.objects.select_for_update(of=("self",)).filter(
                     pk__in=slot_ids
                 ).order_by("pk"))
                 self.clean()
         super().save(*args, **kwargs)
+        if official_changed and meal_orders:
+            for order in meal_orders:
+                order.apply_official_pricing(self.is_competition_official)
+                order.updated_at = timezone.now()
+            MealOrder.objects.bulk_update(meal_orders, (
+                "menu_standard_surcharge_cents", "beverage_standard_surcharge_cents",
+                "official_exemption_applied", "menu_surcharge_cents",
+                "beverage_surcharge_cents", "total_surcharge_cents", "updated_at",
+            ))
 
     @property
     def is_archived(self):
@@ -906,6 +934,17 @@ class MealOrder(UUIDTimeStampedModel):
     total_surcharge_cents = models.PositiveIntegerField(
         _("supplément total"), default=0, editable=False
     )
+    menu_standard_surcharge_cents = models.PositiveIntegerField(
+        _("supplément menu avant exonération"), null=True, default=None,
+        db_default=None, editable=False,
+    )
+    beverage_standard_surcharge_cents = models.PositiveIntegerField(
+        _("supplément boisson avant exonération"), null=True, default=None,
+        db_default=None, editable=False,
+    )
+    official_exemption_applied = models.BooleanField(
+        _("exonération officiel appliquée"), default=False, db_default=False, editable=False,
+    )
     corrected_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name=_("corrigé par"),
@@ -971,24 +1010,91 @@ class MealOrder(UUIDTimeStampedModel):
         if errors:
             raise ValidationError(errors)
 
+    def apply_official_pricing(self, is_official):
+        """Applique l'exonération sans perdre les tarifs réservés ni toucher les paiements."""
+        if self.menu_standard_surcharge_cents is None:
+            self.menu_standard_surcharge_cents = self.menu_surcharge_cents
+        if self.beverage_standard_surcharge_cents is None:
+            self.beverage_standard_surcharge_cents = self.beverage_surcharge_cents
+        self.official_exemption_applied = bool(is_official)
+        self.menu_surcharge_cents = (
+            0 if is_official else self.menu_standard_surcharge_cents
+        )
+        self.beverage_surcharge_cents = (
+            0 if is_official else self.beverage_standard_surcharge_cents
+        )
+        self.total_surcharge_cents = self.menu_surcharge_cents + self.beverage_surcharge_cents
+
+    @transaction.atomic
     def save(self, *args, **kwargs):
-        previous = None
-        if self.pk:
-            previous = MealOrder.objects.filter(pk=self.pk).only("menu_id", "beverage_id").first()
+        previous = MealOrder.objects.filter(pk=self.pk).first() if self.pk else None
+        update_fields = kwargs.get("update_fields")
+        if previous is not None and update_fields is not None:
+            if "registration" not in update_fields and "registration_id" not in update_fields:
+                self.registration_id = previous.registration_id
+        registration_ids = {self.registration_id}
+        if previous is not None:
+            registration_ids.add(previous.registration_id)
+        coordinates = list(Registration.objects.filter(pk__in=registration_ids).values_list(
+            "member_id", "event_day_id"
+        ))
+        members = {member.pk: member for member in Member.objects.select_for_update(of=("self",))
+                   .filter(pk__in={item[0] for item in coordinates}).order_by("pk")}
+        days = {day.pk: day for day in EventDay.objects.select_for_update(of=("self",))
+                .filter(pk__in={item[1] for item in coordinates}).order_by("pk")}
+        registrations = {registration.pk: registration for registration in
+                         Registration.objects.select_for_update(of=("self",))
+                         .filter(pk__in=registration_ids).order_by("pk")}
+        # Relire après les verrous pour ignorer un objet ancien ou un statut forgé.
+        previous = MealOrder.objects.select_for_update(of=("self",)).filter(pk=self.pk).first()
+        if previous is not None:
+            if previous.registration_id not in registrations:
+                raise ValidationError(_("La réservation a été déplacée. Rechargez la page avant de réessayer."))
+            if update_fields is not None:
+                for field in ("registration", "menu", "beverage", "wants_meal", "legacy_availability"):
+                    if field not in update_fields and f"{field}_id" not in update_fields:
+                        attribute = f"{field}_id" if field in ("registration", "menu", "beverage") else field
+                        setattr(self, attribute, getattr(previous, attribute))
+        self.registration = registrations[self.registration_id]
+        self.registration.member = members[self.registration.member_id]
+        self.registration.event_day = days[self.registration.event_day_id]
+        if self.menu_id:
+            self.menu = Menu.objects.select_for_update(of=("self",)).get(pk=self.menu_id)
+        if self.beverage_id:
+            self.beverage = Beverage.objects.select_for_update(of=("self",)).get(pk=self.beverage_id)
         if not self.wants_meal:
             self.menu = None
             self.beverage = None
-            self.menu_surcharge_cents = 0
-            self.beverage_surcharge_cents = 0
+            self.menu_standard_surcharge_cents = 0
+            self.beverage_standard_surcharge_cents = 0
         else:
-            if previous is None or previous.menu_id != self.menu_id:
-                self.menu_surcharge_cents = self.menu.surcharge_cents if self.menu_id else 0
-            if previous is None or previous.beverage_id != self.beverage_id:
-                self.beverage_surcharge_cents = (
-                    self.beverage.surcharge_cents if self.beverage_id else 0
-                )
-        self.total_surcharge_cents = self.menu_surcharge_cents + self.beverage_surcharge_cents
+            for component in ("menu", "beverage"):
+                if previous is None or getattr(previous, f"{component}_id") != getattr(self, f"{component}_id"):
+                    option = getattr(self, component)
+                    standard = option.surcharge_cents if option is not None else 0
+                else:
+                    standard = getattr(previous, f"{component}_standard_surcharge_cents")
+                    if standard is None:
+                        standard = getattr(previous, f"{component}_surcharge_cents")
+                setattr(self, f"{component}_standard_surcharge_cents", standard)
+        is_current = (
+            self.registration.status == Registration.Status.ACTIVE
+            and self.registration.event_day.date >= timezone.localdate()
+        )
+        is_official = (
+            self.registration.member.is_competition_official
+            if previous is None or is_current else previous.official_exemption_applied
+        )
+        self.apply_official_pricing(is_official)
         self.full_clean()
+        if update_fields is not None:
+            kwargs["update_fields"] = set(update_fields) | {
+                "menu_standard_surcharge_cents", "beverage_standard_surcharge_cents",
+                "official_exemption_applied", "menu_surcharge_cents",
+                "beverage_surcharge_cents", "total_surcharge_cents",
+            }
+            if not self.wants_meal:
+                kwargs["update_fields"].update(("menu", "beverage"))
         super().save(*args, **kwargs)
 
     def __str__(self):
