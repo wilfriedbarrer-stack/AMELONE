@@ -24,7 +24,7 @@ _EVENT_FIELDS = (
     "general_instructions",
     "sumup_payment_url",
 )
-_STATION_FIELDS = ("name", "description", "instructions", "category", "is_active", "position")
+_STATION_FIELDS = ("name", "description", "instructions", "category", "age_policy", "is_active", "position")
 _CATERING_FIELDS = ("name", "description", "surcharge_cents", "is_active")
 
 
@@ -156,7 +156,9 @@ def create_event_from_profile(*, profile, name, event_date):
             raise ValueError("Missing first event day")
         for station_config in snapshot.get("stations", []):
             station = Station(
-                event=event, **{field: station_config[field] for field in _STATION_FIELDS}
+                event=event, **{field: station_config.get(field, Station.AgePolicy.NONE)
+                               if field == "age_policy" else station_config[field]
+                               for field in _STATION_FIELDS}
             )
             station.full_clean()
             station.save()

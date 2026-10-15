@@ -6,7 +6,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 
-from .models import Assignment, Event, EventDay, Registration, StationSlot
+from .models import Assignment, Event, EventDay, Registration, Station, StationSlot
 
 
 def _published_events():
@@ -106,6 +106,7 @@ def public_planning(request, event_id=None, day_id=None):
                     "station_category": slot.station.get_category_display(),
                     "category": slot.station.category,
                     "category_label": slot.station.get_category_display(),
+                    "is_official": slot.station.category == Station.Category.OFFICIAL,
                     "name": slot.station.name,
                     "description": slot.station.description,
                     "period": slot.get_period_display(),

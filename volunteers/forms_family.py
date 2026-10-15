@@ -13,6 +13,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from .forms_eligibility import eligible_stations, station_requirements_label
 from .models import Beverage, Family, MealOrder, Member, Menu, Registration, Station
 
 User = get_user_model()
@@ -103,6 +104,36 @@ class MemberForm(forms.ModelForm):
         }
         widgets = {"birth_date": forms.DateInput(attrs={"type": "date"})}
 
+    def _post_clean(self):
+        if self.instance.pk and not self.instance._state.adding:
+            # Les droits ne sont pas exposés dans ce formulaire familial.
+            # Recharger leur valeur évite de valider une révocation involontaire.
+            current = Member.objects.filter(pk=self.instance.pk).values(
+                "is_competition_official", "user_id"
+            ).first()
+            if current:
+                self.instance.is_competition_official = current["is_competition_official"]
+                self.instance.user_id = current["user_id"]
+        super()._post_clean()
+
+    def _update_errors(self, errors):
+        if hasattr(errors, "error_dict"):
+            mapped = {}
+            for field, messages in errors.error_dict.items():
+                target = field if field in self.fields else "__all__"
+                mapped.setdefault(target, []).extend(messages)
+            errors = ValidationError(mapped)
+        super()._update_errors(errors)
+
+    def save(self, commit=True):
+        member = super().save(commit=False)
+        if commit:
+            if member._state.adding:
+                member.save()
+            else:
+                member.save(update_fields=["first_name", "last_name", "birth_date", "updated_at"])
+        return member
+
     def clean_birth_date(self):
         birth_date = self.cleaned_data["birth_date"]
         today = timezone.localdate()
@@ -117,6 +148,12 @@ class MemberForm(forms.ModelForm):
         return birth_date
 
 
+class PreferredStationChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, station):
+        requirements = station_requirements_label(station)
+        return station.name + (f" — {requirements}" if requirements else "")
+
+
 class FamilyRegistrationForm(forms.Form):
     """Saisie d'une disponibilité ; l'enregistrement passe par le service métier."""
 
@@ -124,12 +161,12 @@ class FamilyRegistrationForm(forms.Form):
         label="Disponibilité",
         choices=Registration.Availability.choices,
     )
-    preferred_station = forms.ModelChoiceField(
+    preferred_station = PreferredStationChoiceField(
         label="Poste souhaité (facultatif)",
         queryset=Station.objects.none(),
         required=False,
         empty_label="Sans préférence",
-        help_text="Ce souhait ne réserve pas le poste et ne garantit pas l'affectation.",
+        help_text="Ce souhait ne réserve pas le poste. Les postes d’officiel sont réservés aux membres habilités par un administrateur. Licence et formation à jour nécessaires.",
     )
     note = forms.CharField(
         label="Remarque pour l'organisateur",
@@ -138,9 +175,10 @@ class FamilyRegistrationForm(forms.Form):
         widget=forms.Textarea(attrs={"rows": 3}),
     )
 
-    def __init__(self, *args, event_day, registration=None, allow_closed_meals=False, **kwargs):
+    def __init__(self, *args, event_day, registration=None, member=None, allow_closed_meals=False, **kwargs):
         self.event_day = event_day
         self.registration = registration
+        self.member = member or (registration.member if registration else None)
         if registration is not None and "initial" not in kwargs:
             kwargs["initial"] = {
                 "availability": registration.availability,
@@ -148,10 +186,10 @@ class FamilyRegistrationForm(forms.Form):
                 "note": registration.note,
             }
         super().__init__(*args, **kwargs)
-        self.fields["preferred_station"].queryset = Station.objects.filter(
+        self.fields["preferred_station"].queryset = eligible_stations(Station.objects.filter(
             event=event_day.event,
             is_active=True,
-        ).order_by("name")
+        ).order_by("name"), self.member, event_day)
         self.meal_choices_open = allow_closed_meals or event_day.event.meal_orders_are_open()
         self.menu_options = []
         if self.meal_choices_open:

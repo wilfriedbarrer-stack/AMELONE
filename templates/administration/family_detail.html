@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Famille {{ family.display_name }} — AMELONE{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div class="shell header-copy">
+        <div>
+            <span class="eyebrow">Administration · Membres de la famille</span>
+            <h1>{{ family.display_name }}</h1>
+            <p>Compte responsable : {{ family.account.get_full_name|default:family.account.email }} · {{ family.account.email }}</p>
+        </div>
+        <a class="button button-secondary" href="{% url 'profile_update' family.account.pk %}">Profil du compte responsable</a>
+    </div>
+</header>
+<div class="shell page-stack">
+    <div class="info-banner"><span aria-hidden="true">i</span><p>La fonction s’attribue à chaque personne, y compris au responsable de la famille. Elle permet de choisir un poste d’officiel sans donner de droits de gestion. Licence et formation à jour nécessaires.</p></div>
+    {% for member in members %}
+    <section class="panel" aria-labelledby="member-name-{{ member.pk }}">
+        <div class="panel-heading">
+            <div>
+                <h2 id="member-name-{{ member.pk }}">{{ member.full_name }}</h2>
+                <p>Né(e) le {{ member.birth_date|date:"d/m/Y" }} · {{ member.current_age }} ans · Informations privées</p>
+                {% if member.user_id %}<p>Profil personnel du compte responsable : {{ member.user.email }}</p>{% endif %}
+            </div>
+            <div class="button-row">
+                {% if member.is_archived %}<span class="badge badge-neutral">Archivé</span>{% else %}<span class="badge badge-success">Actif</span>{% endif %}
+                {% if member.is_competition_official %}<span class="badge badge-success">Officiel de compétition</span>{% endif %}
+            </div>
+        </div>
+        <form method="post" class="stack-form">
+            {% csrf_token %}
+            <input type="hidden" name="member_id" value="{{ member.pk }}">
+            {% if member.official_form.non_field_errors %}<div class="alert alert-error" role="alert">{{ member.official_form.non_field_errors }}</div>{% endif %}
+            <div class="field field-checkbox">
+                {{ member.official_form.is_competition_official }}
+                <label for="official-{{ member.pk }}">Officiel de compétition</label>
+                <p class="help-text" id="official-help-{{ member.pk }}">Licence et formation à jour nécessaires.</p>
+                {% for error in member.official_form.is_competition_official.errors %}<p class="field-error" role="alert">{{ error }}</p>{% endfor %}
+            </div>
+            <div class="form-actions"><button class="button button-primary" type="submit">Enregistrer la fonction de {{ member.first_name }}</button></div>
+        </form>
+    </section>
+    {% empty %}<section class="panel"><h2>Aucun membre enregistré</h2><p>Le responsable doit d’abord ajouter les personnes de sa famille ou compléter son profil personnel.</p></section>{% endfor %}
+    <a href="{% url 'administrator_families' %}">Retour aux familles</a>
+</div>
+{% endblock %}
