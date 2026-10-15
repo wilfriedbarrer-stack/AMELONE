@@ -189,6 +189,10 @@ duplication d’un événement et de la création depuis un profil réutilisable
 Le **Planning public** est mis en évidence sur l’accueil et dans la navigation,
 avec ou sans connexion. Il affiche les noms confirmés, les postes, horaires et
 capacités, sans âge individuel, date de naissance, coordonnées, repas ni remarque.
+Les boutons **Tous les postes** et **Uniquement les postes de ma famille**
+permettent de basculer entre la vue complète et les créneaux où un membre de la
+famille connectée est confirmé. Les coéquipiers et les capacités restent visibles.
+Un visiteur est invité à se connecter puis retrouve l’événement et la date choisis.
 
 La migration `0006_member_official_station_age_policy` ajoute ces règles. Elle
 conserve les habilitations de comptes déjà reliés à leur participant personnel.
