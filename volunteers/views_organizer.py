@@ -1,5 +1,5 @@
 import csv
-from collections import Counter
+from decimal import Decimal
 from functools import wraps
 
 from django.conf import settings
@@ -7,9 +7,10 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Count, F, Prefetch, Q
-from django.http import HttpResponse
+from django.db.models import Count, F, Min, Prefetch, Q
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -30,7 +31,6 @@ from .forms_organizer import (
     TrackingFilterForm,
 )
 from .forms_profiles import ProfileEventCreationForm
-from .meal_catalogue import beverage_options_for_day, menu_options_for_day
 from .models import (
     Assignment,
     Attendance,
@@ -115,6 +115,7 @@ def event_list(request):
     events = Event.objects.all()
     events = events.filter(status=Event.Status.ARCHIVED) if show_archived else events.exclude(status=Event.Status.ARCHIVED)
     events = events.annotate(
+        first_date=Min("days__date"),
         day_count=Count("days", distinct=True),
         registration_count=Count("days__registrations", distinct=True),
     ).order_by("status", "-registration_opens_at")
@@ -123,8 +124,9 @@ def event_list(request):
     })
 
 
-def _event_form(request, event=None):
-    form = EventForm(request.POST or None, instance=event)
+def _event_form(request, event=None, *, creation_form=None, form_data=None):
+    data = form_data if form_data is not None else request.POST if request.method == "POST" else None
+    form = EventForm(data, instance=event)
     if request.method == "POST" and form.is_valid():
         try:
             with transaction.atomic():
@@ -158,16 +160,28 @@ def _event_form(request, event=None):
             "form": form,
             "event": event,
             "additional_days": event.days.order_by("date")[1:] if event else (),
-            "profile_creation_form": ProfileEventCreationForm(prefix="profile") if event is None else None,
+            "profile_creation_form": creation_form if event is None else None,
         },
     )
 
 
 @organizer_required
 def event_create(request):
-    if request.method == "POST" and request.POST.get("action") == "create_from_profile":
-        profile_form = ProfileEventCreationForm(request.POST, prefix="profile")
-        if profile_form.is_valid():
+    data = request.POST.copy() if request.method == "POST" else None
+    if data is not None and any(key.startswith("profile-") for key in data):
+        # Keep previously opened forms working after the single-form rollout.
+        for field in ("profile", "name", "event_date"):
+            if f"profile-{field}" in data:
+                data[field] = data[f"profile-{field}"]
+    initial = {"profile": request.GET["modele"]} if request.GET.get("modele") else None
+    profile_form = ProfileEventCreationForm(data, initial=initial)
+    if request.method == "GET" and initial:
+        try:
+            profile_form.fields["profile"].clean(initial["profile"])
+        except ValidationError as error:
+            raise Http404("Ce modèle d’événement n’est plus disponible.") from error
+    if request.method == "POST":
+        if profile_form.is_valid() and profile_form.cleaned_data["profile"]:
             try:
                 event = create_event_from_profile(
                     profile=profile_form.cleaned_data["profile"],
@@ -180,15 +194,17 @@ def event_create(request):
             else:
                 messages.success(
                     request,
-                    "L’événement a été créé en brouillon avec les postes du profil. "
+                    "L’événement a été créé en brouillon avec les postes du modèle. "
                     "Vérifiez ses informations et ses échéances avant publication.",
                 )
                 return redirect("event_update", event_id=event.pk)
-        return render(request, "volunteers/organizer/event_form.html", {
-            "form": EventForm(), "event": None, "additional_days": (),
-            "profile_creation_form": profile_form,
-        })
-    return _event_form(request)
+        if profile_form.errors:
+            return render(request, "volunteers/organizer/event_form.html", {
+                "form": EventForm(data) if not data.get("profile") else EventForm(),
+                "event": None, "additional_days": (),
+                "profile_creation_form": profile_form,
+            })
+    return _event_form(request, creation_form=profile_form, form_data=data)
 
 
 @organizer_required
@@ -612,12 +628,11 @@ def event_emails(request, event_id):
 
 
 def _beverage_preparation_choices(order):
-    """Keep the three service periods distinct, including historical choices."""
-    availability = order.beverage_choice_availability
+    """Shared period labels for preparation quantities and historical choices."""
     main_label = {
         Registration.Availability.MORNING: "Boisson — collation matin",
         Registration.Availability.AFTERNOON: "Boisson — collation après-midi",
-    }.get(availability, "Boisson — repas")
+    }.get(order.beverage_choice_availability, "Boisson — repas")
     return (
         (order.beverage, main_label),
         (order.morning_beverage, "Boisson — collation matin"),
@@ -627,50 +642,11 @@ def _beverage_preparation_choices(order):
 
 @organizer_required
 def catering(request, event_id):
-    event = get_object_or_404(Event.objects.prefetch_related("days__menus", "days__beverages"), pk=event_id)
-    orders = MealOrder.objects.filter(
-        registration__event_day__event=event, registration__status=Registration.Status.ACTIVE,
-    ).select_related(
-        "registration__member__family", "registration__event_day", "menu", "beverage",
-        "morning_snack", "afternoon_snack", "morning_beverage", "afternoon_beverage",
-    )
-    menu_quantities, drink_quantities = Counter(), Counter()
-    for order in orders:
-        if not order.wants_meal:
-            continue
-        day_date = order.registration.event_day.date
-        foods = (
-            (order.menu, order.menu.get_meal_type_display() if order.menu else "Repas"),
-            (order.morning_snack, "Collation matin"),
-            (order.afternoon_snack, "Collation après-midi"),
-        )
-        for food, label in foods:
-            if food:
-                menu_quantities[(day_date, label, food.name)] += 1
-        for beverage, label in _beverage_preparation_choices(order):
-            if beverage:
-                drink_quantities[(day_date, label, beverage.name)] += 1
-    menu_totals = [
-        {"date": date, "type": label, "name": name, "quantity": count}
-        for (date, label, name), count in sorted(menu_quantities.items())
-    ]
-    beverage_totals = [
-        {"date": date, "type": label, "name": name, "quantity": count}
-        for (date, label, name), count in sorted(drink_quantities.items())
-    ]
-    for day in event.days.all():
-        day.offered_menus = menu_options_for_day(day, active_only=False)
-        day.offered_beverages = beverage_options_for_day(day, active_only=False)
-    return render(
-        request,
-        "volunteers/organizer/catering.html",
-        {
-            "event": event,
-            "orders": orders,
-            "menu_totals": menu_totals,
-            "beverage_totals": beverage_totals,
-        },
-    )
+    event = get_object_or_404(Event, pk=event_id)
+    target = reverse("recap_meals", args=[event.pk])
+    if request.GET:
+        target += "?" + request.GET.urlencode()
+    return redirect(target)
 
 
 def _priced_option_form(request, event_day, model, form_class, instance=None):
@@ -778,7 +754,23 @@ def catering_export(request, event_id):
 @organizer_required
 def payments(request, event_id):
     event = get_object_or_404(Event, pk=event_id)
-    form = PaymentForm(request.POST or None, event=event)
+    families = Family.objects.filter(
+        Q(members__registrations__event_day__event=event) | Q(payments__event=event)
+    ).select_related("account").distinct()
+    balances = [(family, family_event_balance(family=family, event=event)) for family in families]
+    selected_payment_family = None
+    initial = {}
+    if request.method == "GET" and request.GET.get("family"):
+        try:
+            selected_payment_family = families.get(pk=request.GET["family"])
+        except (Family.DoesNotExist, ValidationError, ValueError) as error:
+            raise Http404("Cette famille ne participe pas à cet événement.") from error
+        balance = next(balance for family, balance in balances if family.pk == selected_payment_family.pk)
+        initial = {
+            "family": selected_payment_family.pk,
+            "amount_euros": Decimal(balance["amount_remaining_cents"]) / 100,
+        }
+    form = PaymentForm(request.POST if request.method == "POST" else None, event=event, initial=initial)
     if request.method == "POST" and form.is_valid():
         try:
             record_payment(
@@ -796,15 +788,12 @@ def payments(request, event_id):
         else:
             messages.success(request, "Le paiement manuel a été enregistré.")
             return redirect("payments", event_id=event.pk)
-    families = Family.objects.filter(
-        Q(members__registrations__event_day__event=event) | Q(payments__event=event)
-    ).select_related("account").distinct()
-    balances = [(family, family_event_balance(family=family, event=event)) for family in families]
     history = Payment.objects.filter(event=event).select_related("family", "recorded_by")
     return render(
         request,
         "volunteers/organizer/payments.html",
-        {"event": event, "form": form, "balances": balances, "history": history},
+        {"event": event, "form": form, "balances": balances, "history": history,
+         "selected_payment_family": selected_payment_family},
     )
 
 

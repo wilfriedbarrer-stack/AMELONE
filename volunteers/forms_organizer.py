@@ -28,6 +28,7 @@ from .forms_family import (
     configure_beverage_fields,
     configure_official_meal_pricing,
     configure_snack_fields,
+    normalize_meal_payment,
 )
 from .meal_catalogue import menu_options_for_day
 from .models import (
@@ -100,6 +101,12 @@ class EventForm(OrganizerFormMixin, forms.ModelForm):
         )
         if self.event_day:
             self.fields["event_date"].initial = self.event_day.date
+            if self.event_day.registrations.exists():
+                self.fields["event_date"].disabled = True
+                self.fields["event_date"].help_text = (
+                    "Cette date est conservée car des personnes sont déjà inscrites. "
+                    "Utilisez un modèle pour préparer un autre événement."
+                )
         self.order_fields(("name", "event_date", *self.Meta.fields[1:]))
         for name in (
             "registration_opens_at",
@@ -110,6 +117,15 @@ class EventForm(OrganizerFormMixin, forms.ModelForm):
 
     def clean_event_date(self):
         event_date = self.cleaned_data["event_date"]
+        if self.event_day and self.fields["event_date"].disabled and self.is_bound:
+            posted = self.data.get(self.add_prefix("event_date"))
+            if posted:
+                try:
+                    posted_date = forms.DateField().clean(posted)
+                except ValidationError as error:
+                    raise ValidationError("La date ne peut plus être modifiée après une inscription.") from error
+                if posted_date != self.event_day.date:
+                    raise ValidationError("La date ne peut plus être modifiée après une inscription.")
         if self.event_day and event_date != self.event_day.date:
             if self.event_day.registrations.exists():
                 raise ValidationError(
@@ -191,6 +207,11 @@ class StationSlotForm(OrganizerFormMixin, forms.ModelForm):
             if event is not None
             else EventDay.objects.none()
         )
+        days = list(self.fields["event_day"].queryset[:2])
+        if len(days) == 1:
+            self.fields["event_day"].initial = days[0].pk
+            self.fields["event_day"].widget = forms.HiddenInput()
+            self.fields["event_day"].disabled = True
 
 
 StationSlotFormSet = inlineformset_factory(
@@ -356,7 +377,7 @@ EmailConfirmationForm = ConfirmationEmailForm
 
 class PricedOptionFormMixin(OrganizerFormMixin, forms.ModelForm):
     surcharge_euros = forms.DecimalField(
-        label="Supplément (€)",
+        label="Prix catalogue (€)",
         min_value=Decimal("0.00"),
         max_digits=8,
         decimal_places=2,
@@ -441,9 +462,7 @@ class MealOrderOrganizerForm(OrganizerFormMixin, forms.ModelForm):
         )
         if wants_meal and cleaned.get("menu") is None:
             self.add_error("menu", "Choisissez un menu.")
-        if not wants_meal and (cleaned.get("menu") or cleaned.get("beverage")):
-            raise ValidationError("Un repas non demandé ne peut contenir ni menu ni boisson.")
-        return cleaned
+        return normalize_meal_payment(self, cleaned)
 
 
 MealOrderForm = MealOrderOrganizerForm
@@ -453,6 +472,7 @@ class PaymentForm(OrganizerFormMixin, forms.Form):
     family = forms.ModelChoiceField(label="Famille", queryset=Family.objects.none())
     amount_euros = forms.DecimalField(
         label="Montant (€)",
+        help_text="Montant réellement reçu, même pour un règlement partiel.",
         min_value=Decimal("0.01"),
         max_digits=10,
         decimal_places=2,
@@ -463,7 +483,7 @@ class PaymentForm(OrganizerFormMixin, forms.Form):
         widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
         input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S"],
     )
-    method = forms.ChoiceField(label="Mode", choices=Payment.Method.choices)
+    method = forms.ChoiceField(label="Mode de règlement", choices=Payment.Method.choices)
     note = forms.CharField(
         label="Remarque",
         required=False,

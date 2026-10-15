@@ -7,99 +7,122 @@
  const availability = document.getElementById('id_availability'), menu = document.getElementById('id_menu');
  const noMeal = document.getElementById('id_no_meal'), beverage = document.getElementById('id_beverage');
  const wantsMeal = document.getElementById('id_wants_meal');
- const snacks = ['id_morning_snack', 'id_afternoon_snack'].map(id => document.getElementById(id)).filter(Boolean);
- const options = JSON.parse(document.getElementById('menu-options').textContent);
- const beverageOptions = JSON.parse(document.getElementById('beverage-options').textContent);
- const beverageSettings = JSON.parse(document.getElementById('snack-beverage-settings').textContent);
- const snackBeverages = ['morning', 'afternoon'].map(period => ({
-  field: document.getElementById('id_' + period + '_beverage'),
-  snack: document.getElementById('id_' + period + '_snack'), enabled: beverageSettings[period + '_enabled']
- })).filter(choice => choice.field);
+ const options = JSON.parse(document.getElementById('menu-options').textContent) || [];
+ const beverageOptions = JSON.parse(document.getElementById('beverage-options').textContent) || [];
+ const settings = JSON.parse(document.getElementById('snack-beverage-settings').textContent) || {};
  const pricing = JSON.parse(document.getElementById('official-pricing-options').textContent);
  const preferredStation = document.getElementById('id_preferred_station');
  const slotChoices = [...document.querySelectorAll('input[name="station_slots"]')];
  const payment = document.getElementById('id_payment_method');
- function isExempt() {
+ const fields = ['morning_snack', 'morning_beverage', 'menu', 'beverage', 'afternoon_snack', 'afternoon_beverage'];
+ const labels = {morning_snack:'Collation du matin', morning_beverage:'Boisson du matin', menu:'Repas ou collation', beverage:'Boisson', afternoon_snack:'Collation de l’après-midi', afternoon_beverage:'Boisson de l’après-midi'};
+ const controls = Object.fromEntries(fields.map(name => [name, document.getElementById('id_' + name)]));
+ const currentPhase = () => availability?.value || '{{ form.meal_availability|default:"full_day"|escapejs }}';
+ const fullDay = () => currentPhase() === 'full_day';
+ const mealWanted = () => noMeal ? !noMeal.checked : wantsMeal ? wantsMeal.checked : true;
+ let previousPhase = currentPhase();
+ const phaseSelections = {menu:{[previousPhase]:menu?.value || ''}, beverage:{[previousPhase]:beverage?.value || ''}};
+ const records = {};
+ for (const name of fields) records[name] = new Map((pricing.option_prices[name] || []).map(option => [option.id, option]));
+ for (const option of options) records.menu.set(option.id, {...option, standard:option.standard_label, official:option.official_label});
+ for (const option of beverageOptions) records.beverage.set(option.id, {...option, standard:option.standard_label, official:option.official_label});
+ const setVisible = (element, visible) => { if (element) { element.hidden = !visible; element.style.display = visible ? '' : 'none'; } };
+ const euros = cents => Math.trunc(cents / 100).toLocaleString('fr-FR') + ',' + String(cents % 100).padStart(2, '0') + ' €';
+ function exempt() {
   if (pricing.fixed_exemption !== null) return pricing.fixed_exemption;
   if (!pricing.eligible) return false;
   if (pricing.slots !== null) return !slotChoices.some(input => input.checked && pricing.slots[input.value] === 'volunteer');
   if (pricing.has_assignments) return !pricing.has_volunteer_assignment;
   return !preferredStation || pricing.stations[preferredStation.value] !== 'volunteer';
  }
- const isFullDay = () => availability ? availability.value === 'full_day' : '{{ form.meal_availability|default:"full_day"|escapejs }}' === 'full_day';
- const mealWanted = () => noMeal ? !noMeal.checked : wantsMeal ? wantsMeal.checked : true;
- function updateMenus() {
-  if (!availability || !menu) return;
-  const previous = menu.value, type = isFullDay() ? 'full_meal' : 'snack';
-  menu.replaceChildren(new Option('Choisir selon la présence', ''));
-  for (const option of options) {
-   if (option.type !== type && option.legacy !== availability.value) continue;
-   const label = isExempt() ? option.official_label : option.standard_label;
-   menu.add(new Option(label, option.id));
+ function rebuildChoices(changingPhase = false) {
+  if (!availability) return;
+  if (changingPhase) {
+   if (menu) phaseSelections.menu[previousPhase] = menu.value;
+   if (beverage) phaseSelections.beverage[previousPhase] = beverage.value;
   }
-  if ([...menu.options].some(option => option.value === previous)) menu.value = previous;
-  const entitlement = document.getElementById('meal-entitlement');
-  if (entitlement) entitlement.textContent = isFullDay() ? 'À la journée, choisissez un repas complet et, si vous le souhaitez, une collation le matin et une l’après-midi.' : 'À la demi-journée, choisissez une collation.';
+  const phase = currentPhase();
+  if (menu) {
+   const selected = phaseSelections.menu[phase] ?? menu.value;
+   menu.replaceChildren(new Option('Choisir un repas ou une collation', ''));
+   for (const option of options) if (option.type === (fullDay() ? 'full_meal' : 'snack') || option.legacy === phase) menu.add(new Option(option.name, option.id));
+   if ([...menu.options].some(option => option.value === selected)) menu.value = selected;
+  }
+  if (beverage) {
+   const selected = phaseSelections.beverage[phase] ?? beverage.value;
+   beverage.replaceChildren(new Option('Sans boisson', ''));
+   for (const option of beverageOptions) {
+    const allowed = option.active && (fullDay() || (phase === 'morning' && settings.morning_enabled && option.temperature === 'hot') || (phase === 'afternoon' && settings.afternoon_enabled && option.temperature === 'cold'));
+    if (allowed || option.legacy_availability === phase) beverage.add(new Option(option.name, option.id));
+   }
+   if ([...beverage.options].some(option => option.value === selected)) beverage.value = selected;
+  }
+  previousPhase = phase;
  }
- function updateBeverages() {
-  if (!availability || !beverage) return;
-  const previous = beverage.value, period = availability.value;
-  beverage.replaceChildren(new Option('Sans boisson', ''));
-  for (const option of beverageOptions) {
-   const normallyAllowed = option.active && (isFullDay() ||
-    (period === 'morning' && beverageSettings.morning_enabled && option.temperature === 'hot') ||
-    (period === 'afternoon' && beverageSettings.afternoon_enabled && option.temperature === 'cold'));
-   if (!normallyAllowed && option.legacy_availability !== period) continue;
-   beverage.add(new Option(isExempt() ? option.official_label : option.standard_label, option.id));
-  }
-  if ([...beverage.options].some(option => option.value === previous)) beverage.value = previous;
- }
- function updatePricing() {
-  const exempt = isExempt();
-  for (const [name, prices] of Object.entries(pricing.option_prices)) {
-   const select = document.getElementById('id_' + name);
-   if (!select) continue;
-   const labels = new Map(prices.map(option => [option.id, exempt ? option.official : option.standard]));
-   if (name === 'menu') for (const option of options) labels.set(option.id, exempt ? option.official_label : option.standard_label);
-   if (name === 'beverage') for (const option of beverageOptions) labels.set(option.id, exempt ? option.official_label : option.standard_label);
-   for (const option of select.options) if (labels.has(option.value)) option.textContent = labels.get(option.value);
-  }
-  if (payment && payment.type !== 'hidden') {
-   payment.disabled = exempt;
-   const row = payment.closest('.field');
-   if (row) { row.hidden = exempt; row.style.display = exempt ? 'none' : ''; }
-  }
-  const title = document.getElementById('official-meal-pricing-title'), detail = document.getElementById('official-meal-pricing-detail');
-  if (title) title.textContent = exempt ? 'Officiel de compétition : aucun supplément pour le repas et la boisson.' : 'Poste bénévole : restauration au tarif bénévole.';
-  if (detail) detail.textContent = exempt ? 'Les collations du matin et de l’après-midi et leurs boissons associées sont également sans supplément.' : 'Un officiel inscrit à un poste bénévole règle son repas, ses collations et ses boissons comme les autres bénévoles.';
- }
- function updateMeal() {
-  if (!menu) return;
+ function updateVisibility() {
   const wanted = mealWanted();
-  menu.disabled = !wanted;
-  if (beverage) beverage.disabled = !wanted;
-  if (!wanted) { menu.value = ''; if (beverage) beverage.value = ''; }
-  for (const snack of snacks) {
-   const row = snack.closest('.field');
-   if (row) { row.hidden = !isFullDay(); row.style.display = isFullDay() ? '' : 'none'; }
-   snack.disabled = !wanted || !isFullDay();
-   if (snack.disabled) snack.value = '';
+  setVisible(document.getElementById('meal-choices'), wanted);
+  setVisible(document.getElementById('meal-entitlement'), wanted);
+  for (const name of fields) {
+   const control = controls[name]; if (!control) continue;
+   let offered = wanted;
+   if (name.includes('_snack')) offered = wanted && fullDay();
+   if (name === 'morning_beverage' || name === 'afternoon_beverage') {
+    const period = name.split('_')[0];
+    offered = wanted && fullDay() && !!controls[period + '_snack']?.value && (settings[period + '_enabled'] || !!control.value);
+   }
+   control.disabled = !offered;
+   setVisible(control.closest('.field'), offered);
   }
-  for (const choice of snackBeverages) {
-   const visible = isFullDay() && !!choice.snack?.value && (choice.enabled || !!choice.field.value);
-   const row = choice.field.closest('.field');
-   if (row) { row.hidden = !visible; row.style.display = visible ? '' : 'none'; }
-   choice.field.disabled = !wanted || !visible;
-   if (choice.field.disabled) choice.field.value = '';
-  }
+  for (const period of ['morning', 'afternoon']) setVisible(document.getElementById('meal-period-' + period), wanted && fullDay());
+  const phase = currentPhase(), mainTitle = fullDay() ? 'Midi' : phase === 'morning' ? 'Matin' : 'Après-midi';
+  const heading = document.getElementById('meal-main-heading'); if (heading) heading.textContent = mainTitle;
+  const menuLabel = document.querySelector('label[for="id_menu"]'); if (menuLabel) menuLabel.textContent = fullDay() ? 'Repas du midi' : 'Collation ' + (phase === 'morning' ? 'du matin' : 'de l’après-midi');
+  const drinkLabel = document.querySelector('label[for="id_beverage"]'); if (drinkLabel) drinkLabel.textContent = fullDay() ? 'Boisson du repas' : phase === 'morning' ? 'Boisson chaude' : 'Boisson fraîche';
  }
- if (availability) availability.addEventListener('change', () => {updateMenus(); updateBeverages(); updateMeal(); updatePricing();});
- if (preferredStation) preferredStation.addEventListener('change', updatePricing);
- for (const input of slotChoices) input.addEventListener('change', updatePricing);
- if (noMeal) noMeal.addEventListener('change', updateMeal);
- if (wantsMeal) wantsMeal.addEventListener('change', updateMeal);
- for (const snack of snacks) snack.addEventListener('change', updateMeal);
- for (const choice of snackBeverages) choice.field.addEventListener('change', updateMeal);
- updateMenus(); updateBeverages(); updateMeal(); updatePricing();
+ function updateSummary() {
+  const free = exempt();
+  for (const name of fields) {
+   const control = controls[name]; if (!control || !control.options) continue;
+   const names = new Map();
+   for (const option of control.options) { const record = records[name].get(option.value); if (record) { const key = record.name.trim().toLocaleLowerCase('fr-FR'); names.set(key, (names.get(key) || 0) + 1); } }
+   for (const option of control.options) {
+    const record = records[name].get(option.value);
+    if (record) option.textContent = record.name + (names.get(record.name.trim().toLocaleLowerCase('fr-FR')) > 1 ? ' — ' + record.origin : '') + ' — ' + euros(free ? 0 : record.standard_surcharge) + (free ? ' (officiel)' : '');
+   }
+  }
+  let total = 0; const lines = [];
+  for (const name of fields) {
+   const control = controls[name], record = control ? records[name].get(control.value) : null;
+   if (!control || control.disabled || !record || !mealWanted()) continue;
+   const cents = free ? 0 : record.standard_surcharge;
+   if (!Number.isSafeInteger(cents) || cents < 0) continue;
+   total += cents; lines.push({name, title:record.name, cents});
+  }
+  const container = document.getElementById('meal-summary-lines');
+  if (container) {
+   container.replaceChildren();
+   for (const line of lines) {
+    const row = document.createElement('div'), description = document.createElement('span'), amount = document.createElement('span');
+    row.className = 'meal-summary-row'; description.textContent = labels[line.name] + ' : ' + line.title; amount.textContent = euros(line.cents);
+    row.append(description, amount); container.append(row);
+   }
+   if (!lines.length) { const empty = document.createElement('p'); empty.textContent = mealWanted() ? 'Choisissez votre restauration ci-dessus.' : 'Sans repas ni collation.'; container.append(empty); }
+  }
+  const amount = document.getElementById('meal-summary-total'); if (amount) amount.textContent = euros(total);
+  if (payment && payment.type !== 'hidden') { payment.disabled = total === 0; payment.required = total > 0; setVisible(payment.closest('.field'), total > 0); }
+  setVisible(document.getElementById('meal-payment-free'), total === 0);
+  const title = document.getElementById('official-meal-pricing-title'), detail = document.getElementById('official-meal-pricing-detail');
+  if (title) title.textContent = free ? 'Officiel de compétition : aucun supplément pour le repas et la boisson.' : 'Poste bénévole : restauration au tarif bénévole.';
+  if (detail) detail.textContent = free ? 'Les collations et leurs boissons sont également sans supplément.' : 'Le tarif bénévole s’applique aux repas, collations et boissons réservés.';
+ }
+ function refresh() { updateVisibility(); updateSummary(); }
+ if (availability) availability.addEventListener('change', () => { rebuildChoices(true); refresh(); });
+ if (preferredStation) preferredStation.addEventListener('change', refresh);
+ for (const input of slotChoices) input.addEventListener('change', refresh);
+ if (noMeal) noMeal.addEventListener('change', refresh);
+ if (wantsMeal) wantsMeal.addEventListener('change', refresh);
+ for (const control of Object.values(controls)) if (control) control.addEventListener('change', refresh);
+ rebuildChoices(); refresh();
 })();
 </script>

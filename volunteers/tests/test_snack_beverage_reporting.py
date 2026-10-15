@@ -34,26 +34,33 @@ class SnackBeverageReportingTests(DataMixin, TestCase):
             actor=self.organizer,
         )
 
+    def report(self, name, *, view="participants"):
+        response = self.client.get(reverse(name, args=[self.event.pk]), {"view": view}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        if name == "catering":
+            self.assertEqual(response.redirect_chain, [(
+                reverse("recap_meals", args=[self.event.pk]) + f"?view={view}", 302,
+            )])
+        return response
+
     def test_recap_and_catering_distinguish_three_drink_service_periods(self):
         self.order()
-        for name, quantity_key, count_key in (
-            ("recap_meals", "beverage_quantities", "count"),
-            ("catering", "beverage_totals", "quantity"),
-        ):
+        for name in ("recap_meals", "catering"):
             with self.subTest(name=name):
-                response = self.client.get(reverse(name, args=[self.event.pk]))
-                self.assertEqual(response.status_code, 200)
+                response = self.report(name, view="quantities")
                 self.assertEqual(
-                    {(item["type"], item["name"]): item[count_key]
-                     for item in response.context[quantity_key]},
+                    {(item["type"], item["name"]): item["count"]
+                     for item in response.context["beverage_quantities"]},
                     {
                         ("Boisson — collation matin", self.hot.name): 1,
                         ("Boisson — repas", self.hot.name): 1,
                         ("Boisson — collation après-midi", self.cold.name): 1,
                     },
                 )
-                self.assertContains(response, "Boisson chaude matin")
-                self.assertContains(response, "Boisson fraîche après-midi")
+                self.assertContains(response, "Boisson — collation matin")
+                self.assertContains(response, "Boisson — collation après-midi")
+                self.assertContains(response, self.hot.name)
+                self.assertContains(response, self.cold.name)
         row = self.client.get(reverse("recap_meals", args=[self.event.pk])).context["rows"][0]
         self.assertEqual(row["morning_beverage_name"], self.hot.name)
         self.assertEqual(row["afternoon_beverage_name"], self.cold.name)
@@ -67,7 +74,7 @@ class SnackBeverageReportingTests(DataMixin, TestCase):
         Beverage.objects.all().update(surcharge_cents=9999, is_active=False)
         before = MealOrder.objects.filter(pk=order.pk).values().get()
         for name in ("recap_meals", "catering"):
-            response = self.client.get(reverse(name, args=[self.event.pk]))
+            response = self.report(name)
             self.assertContains(response, self.hot.name)
             self.assertContains(response, self.cold.name)
         for name in ("recap_meals_csv", "catering_export"):
@@ -85,12 +92,9 @@ class SnackBeverageReportingTests(DataMixin, TestCase):
         cancelled = self.order(member=self.other_member)
         cancelled.registration.status = Registration.Status.CANCELLED
         cancelled.registration.save(update_fields=["status"])
-        for name, key, count_key in (
-            ("recap_meals", "beverage_quantities", "count"),
-            ("catering", "beverage_totals", "quantity"),
-        ):
-            response = self.client.get(reverse(name, args=[self.event.pk]))
-            self.assertEqual(sum(item[count_key] for item in response.context[key]), 3)
+        for name in ("recap_meals", "catering"):
+            response = self.report(name, view="quantities")
+            self.assertEqual(sum(item["count"] for item in response.context["beverage_quantities"]), 3)
 
     def test_half_day_main_drink_is_counted_in_its_collation_period(self):
         save_meal_order(
@@ -101,9 +105,9 @@ class SnackBeverageReportingTests(DataMixin, TestCase):
             registration=self.registration(member=self.other_member, availability=Registration.Availability.AFTERNOON),
             menu=self.snack, beverage=self.cold, actor=self.organizer,
         )
-        response = self.client.get(reverse("catering", args=[self.event.pk]))
+        response = self.report("catering", view="quantities")
         self.assertEqual(
-            {(item["type"], item["name"]): item["quantity"] for item in response.context["beverage_totals"]},
+            {(item["type"], item["name"]): item["count"] for item in response.context["beverage_quantities"]},
             {("Boisson — collation matin", self.hot.name): 1,
              ("Boisson — collation après-midi", self.cold.name): 1},
         )
@@ -112,10 +116,10 @@ class SnackBeverageReportingTests(DataMixin, TestCase):
         order = self.order()
         # An administrator can retain a past meal after correcting presence.
         Registration.objects.filter(pk=order.registration_id).update(availability=Registration.Availability.MORNING)
-        response = self.client.get(reverse("catering", args=[self.event.pk]))
+        response = self.report("catering", view="quantities")
         self.assertIn(
             ("Boisson — repas", self.hot.name),
-            {(item["type"], item["name"]) for item in response.context["beverage_totals"]},
+            {(item["type"], item["name"]) for item in response.context["beverage_quantities"]},
         )
 
     def test_organizer_create_and_update_forward_both_extra_drinks(self):

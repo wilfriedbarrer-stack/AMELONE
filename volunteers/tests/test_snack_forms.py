@@ -29,14 +29,14 @@ class SharedMealAndSnackFormTests(DataMixin, TestCase):
             "beverage": str(self.drink.pk), "payment_method": "counter", **extra,
         }
 
-    def test_full_day_accepts_common_and_local_snacks_with_clear_origin_labels(self):
+    def test_full_day_accepts_common_and_local_snacks_with_concise_price_labels(self):
         form = FamilyRegistrationForm(self.data(), event_day=self.day, member=self.member)
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data["morning_snack"], self.snack)
         self.assertEqual(form.cleaned_data["afternoon_snack"], self.local_snack)
         field = form.fields["morning_snack"]
-        self.assertIn("Commun", field.label_from_instance(self.snack))
-        self.assertIn("Spécifique à cet événement", field.label_from_instance(self.local_snack))
+        self.assertEqual(field.label_from_instance(self.snack), f"{self.snack.name} — 1,00 €")
+        self.assertEqual(field.label_from_instance(self.local_snack), f"{self.local_snack.name} — 1,50 €")
 
     def test_full_day_snacks_are_optional_and_no_meal_cleans_all_extra_keys(self):
         for data in (

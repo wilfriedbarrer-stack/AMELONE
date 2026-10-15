@@ -5,6 +5,8 @@ de la journée concernée. Une valeur forgée dans le navigateur ne peut donc pa
 référencer un poste, un menu ou une boisson d'un autre événement.
 """
 
+from collections import Counter
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
@@ -24,14 +26,37 @@ SNACK_BEVERAGE_FIELDS = ("morning_beverage", "afternoon_beverage")
 SNACK_CHOICE_FIELDS = (*SNACK_FIELDS, *SNACK_BEVERAGE_FIELDS)
 MEAL_COMPONENT_FIELDS = ("menu", *SNACK_FIELDS, "beverage", *SNACK_BEVERAGE_FIELDS)
 MEAL_FIELD_ORDER = ("menu", "beverage", "morning_snack", "morning_beverage", "afternoon_snack", "afternoon_beverage")
+MEAL_SUMMARY_LABELS = {
+    "menu": "Repas ou collation", "beverage": "Boisson",
+    "morning_snack": "Collation du matin", "morning_beverage": "Boisson du matin",
+    "afternoon_snack": "Collation de l’après-midi", "afternoon_beverage": "Boisson de l’après-midi",
+}
 
 
-def meal_option_label(option, *, official=False, surcharge_cents=None):
-    origin = "Commun" if option.event_day_id is None else "Spécifique à cet événement"
+def meal_option_label(option, *, official=False, surcharge_cents=None, distinguish_origin=False):
     standard = option.surcharge_cents if surcharge_cents is None else surcharge_cents
     cents = 0 if official else standard
     price = f"{cents / 100:.2f}".replace(".", ",")
-    return f"{option.name} — {origin} — {price} €" + (" (officiel)" if official else "")
+    origin = ("Commun" if option.event_day_id is None else "Spécifique à cet événement")
+    return f"{option.name}" + (f" — {origin}" if distinguish_origin else "") + f" — {price} €" + (" (officiel)" if official else "")
+
+
+def _form_value(form, name):
+    value = form.data.get(form.add_prefix(name)) if form.is_bound else form.initial.get(name)
+    return str(getattr(value, "pk", value) or "")
+
+
+def _meal_is_wanted(form):
+    if "no_meal" in form.fields:
+        return not forms.BooleanField(required=False).to_python(_form_value(form, "no_meal"))
+    if "wants_meal" in form.fields:
+        return forms.BooleanField(required=False).to_python(_form_value(form, "wants_meal"))
+    return True
+
+
+def normalize_meal_payment(form, cleaned):
+    cleaned["payment_method"] = cleaned.get("payment_method") or MealOrder.PaymentMethod.COUNTER
+    return cleaned
 
 
 def _meal_component_surcharge(option, component, meal_order=None):
@@ -43,6 +68,11 @@ def _meal_component_surcharge(option, component, meal_order=None):
 
 def configure_snack_fields(form, event_day, availability, order=None):
     form.meal_availability = availability
+    if "menu" in form.fields:
+        form.fields["menu"].label = {
+            "full_day": "Repas du midi", "morning": "Collation du matin",
+            "afternoon": "Collation de l’après-midi",
+        }.get(availability, "Repas ou collation")
     for name, label in (("morning_snack", "Collation du matin (facultatif)"),
                         ("afternoon_snack", "Collation de l’après-midi (facultatif)")):
         old_id = getattr(order, f"{name}_id", None) if order else None
@@ -76,7 +106,8 @@ def configure_beverage_fields(form, event_day, availability, order=None):
     if old_main_id and old_availability == availability:
         allowed |= Q(pk=old_main_id)
     form.fields["beverage"] = forms.ModelChoiceField(
-        label="Boisson du repas ou de la collation", queryset=beverages.filter(allowed).order_by("name"),
+        label={"full_day": "Boisson du repas", "morning": "Boisson chaude", "afternoon": "Boisson fraîche"}.get(availability, "Boisson"),
+        queryset=beverages.filter(allowed).order_by("name"),
         required=False, empty_label="Sans boisson",
     )
     if order:
@@ -85,7 +116,9 @@ def configure_beverage_fields(form, event_day, availability, order=None):
     for option in beverages.filter(Q(is_active=True) | Q(pk=old_main_id)).order_by("name"):
         standard = _meal_component_surcharge(option, "beverage", order)
         form.beverage_options.append({
-            "id": str(option.pk), "temperature": option.temperature, "active": option.is_active,
+            "id": str(option.pk), "name": option.name, "temperature": option.temperature, "active": option.is_active,
+            "origin": "Commun" if option.event_day_id is None else "Spécifique à cet événement",
+            "standard_surcharge": standard,
             "standard_label": meal_option_label(option, surcharge_cents=standard),
             "official_label": meal_option_label(option, official=True),
             "legacy_availability": old_availability if option.pk == old_main_id else "",
@@ -184,6 +217,13 @@ def official_meal_exemption(member, meal_order=None, *, reactivating=False, form
 def configure_official_meal_pricing(form, member, meal_order=None, *, reactivating=False):
     """Présente le tarif du rôle tenu, et les données du changement de poste."""
     form.official_exemption = official_meal_exemption(member, meal_order, reactivating=reactivating, form=form)
+    if form.is_bound and not _meal_is_wanted(form):
+        # Le choix explicite « sans repas » est appliqué à l'enregistrement.
+        # Les valeurs conservées dans le navigateur ne doivent pas le bloquer.
+        form.data = form.data.copy()
+        for name in MEAL_COMPONENT_FIELDS:
+            if name in form.fields:
+                form.data[form.add_prefix(name)] = ""
     dynamic = "preferred_station" in form.fields or "station_slots" in form.fields
     form.official_pricing_show_notice = bool(member and member.is_competition_official) or form.official_exemption
     option_prices = {}
@@ -191,26 +231,47 @@ def configure_official_meal_pricing(form, member, meal_order=None, *, reactivati
         if name in form.fields:
             options = list(form.fields[name].queryset)
             prices = {option.pk: _meal_component_surcharge(option, name, meal_order) for option in options}
+            names = Counter(option.name.strip().casefold() for option in options)
             form.fields[name].label_from_instance = (
-                lambda option, prices=prices: meal_option_label(
+                lambda option, prices=prices, names=names: meal_option_label(
                     option, official=form.official_exemption, surcharge_cents=prices.get(option.pk),
+                    distinguish_origin=names[option.name.strip().casefold()] > 1,
                 )
             )
             option_prices[name] = [
-                {"id": str(option.pk), "standard": meal_option_label(option, surcharge_cents=prices[option.pk]),
-                 "standard_surcharge": prices[option.pk], "official": meal_option_label(option, official=True)}
+                {"id": str(option.pk), "name": option.name,
+                 "origin": "Commun" if option.event_day_id is None else "Spécifique à cet événement",
+                 "standard": meal_option_label(option, surcharge_cents=prices[option.pk], distinguish_origin=names[option.name.strip().casefold()] > 1),
+                 "standard_surcharge": prices[option.pk], "official": meal_option_label(option, official=True, distinguish_origin=names[option.name.strip().casefold()] > 1)}
                 for option in options
             ]
     for option in getattr(form, "menu_options", []):
         option["label"] = option["official_label"] if form.official_exemption else option["standard_label"]
         option["surcharge"] = 0 if form.official_exemption else option["standard_surcharge"]
+    selected_prices = []
+    form.preview_summary = []
+    availability = getattr(form, "meal_availability", Registration.Availability.FULL_DAY)
+    for name, choices in option_prices.items():
+        if name in SNACK_CHOICE_FIELDS and availability != Registration.Availability.FULL_DAY:
+            continue
+        if name in SNACK_BEVERAGE_FIELDS and not _form_value(form, name.replace("beverage", "snack")):
+            continue
+        for option in choices:
+            if option["id"] == _form_value(form, name):
+                selected_prices.append(option["standard_surcharge"])
+                if _meal_is_wanted(form):
+                    form.preview_summary.append({
+                        "label": MEAL_SUMMARY_LABELS[name], "name": option["name"],
+                        "cents": 0 if form.official_exemption else option["standard_surcharge"],
+                    })
+    form.preview_total_cents = sum(selected_prices) if _meal_is_wanted(form) and not form.official_exemption else 0
     if "payment_method" in form.fields:
         field = form.fields["payment_method"]
-        field.disabled = form.official_exemption
-        if form.official_exemption:
-            if not dynamic:
+        field.disabled = form.preview_total_cents == 0
+        field.required = False
+        if form.preview_total_cents == 0:
+            if not dynamic and form.official_exemption:
                 field.widget = forms.HiddenInput()
-            field.required = False
             field.initial = MealOrder.PaymentMethod.COUNTER
             form.initial["payment_method"] = MealOrder.PaymentMethod.COUNTER
     registration = _pricing_registration(form, member, meal_order) if member else None
@@ -426,7 +487,7 @@ class FamilyRegistrationForm(forms.Form):
             self.initial.update({"no_meal": not order.wants_meal if order else not menus.filter(allowed).exists(), "menu": order.menu_id if order else None, "beverage": order.beverage_id if order else None, "payment_method": order.payment_method if order else MealOrder.PaymentMethod.COUNTER})
             for menu in menus:
                 standard = _meal_component_surcharge(menu, "menu", order)
-                self.menu_options.append({"id": str(menu.pk), "name": menu.name, "label": meal_option_label(menu, official=self.official_exemption, surcharge_cents=standard), "standard_label": meal_option_label(menu, surcharge_cents=standard), "official_label": meal_option_label(menu, official=True), "type": menu.meal_type, "surcharge": 0 if self.official_exemption else standard, "standard_surcharge": standard, "legacy": order.legacy_choice_availability if order and order.menu_id == menu.pk else ""})
+                self.menu_options.append({"id": str(menu.pk), "name": menu.name, "origin": "Commun" if menu.event_day_id is None else "Spécifique à cet événement", "label": meal_option_label(menu, official=self.official_exemption, surcharge_cents=standard), "standard_label": meal_option_label(menu, surcharge_cents=standard), "official_label": meal_option_label(menu, official=True), "type": menu.meal_type, "surcharge": 0 if self.official_exemption else standard, "standard_surcharge": standard, "legacy": order.legacy_choice_availability if order and order.menu_id == menu.pk else ""})
             self.order_fields(("availability", "preferred_station", "note", "no_meal", *MEAL_FIELD_ORDER, "payment_method"))
         configure_official_meal_pricing(self, self.member, order, reactivating=True)
 
@@ -444,8 +505,7 @@ class FamilyRegistrationForm(forms.Form):
                 cleaned["no_meal"] = True
             else:
                 self.add_error("menu", "Choisissez le repas ou la collation, ou indiquez que vous n’en souhaitez pas.")
-        cleaned["payment_method"] = cleaned.get("payment_method") or MealOrder.PaymentMethod.COUNTER
-        return cleaned
+        return normalize_meal_payment(self, cleaned)
 
 
 
@@ -505,5 +565,5 @@ class FamilyMealForm(forms.Form):
             )
         if not no_meal and menu is None:
             self.add_error("menu", "Choisissez un menu ou indiquez « Pas de repas ».")
-        return cleaned_data
+        return normalize_meal_payment(self, cleaned_data)
 

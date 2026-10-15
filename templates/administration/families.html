@@ -1,35 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Familles et officiels — AMELONE{% endblock %}
+{% block title %}Familles et membres — AMELONE{% endblock %}
 {% block content %}
-<header class="page-header">
-    <div class="shell header-copy">
-        <div>
-            <span class="eyebrow">Administration</span>
-            <h1>Familles et officiels</h1>
-            <p>Modifiez les coordonnées des familles et les profils de leurs membres, puis attribuez leur fonction d’officiel de compétition.</p>
-        </div>
-    </div>
-</header>
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Gestion des personnes</span><h1>Familles et membres</h1><p>Ouvrez une fiche famille pour retrouver le responsable, modifier ses membres et gérer les droits du compte.</p></div><a class="button button-secondary" href="{% url 'profile_list' %}">Comptes et droits</a></div></header>
 <div class="shell page-stack">
     <div class="info-banner"><span aria-hidden="true">i</span><p>Ces informations sont réservées aux administrateurs. Les dates de naissance et les âges restent privés.</p></div>
-    <section class="panel table-panel">
-        <div class="responsive-table">
-            <table>
-                <thead><tr><th scope="col">Famille</th><th scope="col">Compte responsable</th><th scope="col">Membres</th><th scope="col">Officiels</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
-                <tbody>
-                    {% for family in families %}
-                    <tr>
-                        <td data-label="Famille"><strong>{{ family.display_name }}</strong></td>
-                        <td data-label="Compte responsable">{{ family.account.get_full_name|default:family.account.email }}<br>{{ family.account.email }}{% if not family.account.is_active %}<br><span class="badge badge-neutral">Compte désactivé</span>{% endif %}</td>
-                        <td data-label="Membres">{{ family.active_member_count }} actif{{ family.active_member_count|pluralize }} / {{ family.member_count }} au total</td>
-                        <td data-label="Officiels">{{ family.official_count }}</td>
-                        <td class="table-actions"><a href="{% url 'administrator_family_detail' family.pk %}">Voir les membres et attribuer les fonctions</a><a href="{% url 'administrator_family_update' family.pk %}">Modifier la famille</a><a href="{% url 'profile_update' family.account.pk %}">Modifier les droits du compte</a></td>
-                    </tr>
-                    {% empty %}<tr><td colspan="5">Aucune famille enregistrée.</td></tr>{% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </section>
-    <a href="{% url 'administration_dashboard' %}">Retour à l’administration</a>
+    <section class="panel table-panel"><div class="responsive-table"><table class="mobile-card-table">
+        <thead><tr><th scope="col">Famille</th><th scope="col">Responsable</th><th scope="col">Membres</th><th scope="col">Officiels</th><th scope="col">Action</th></tr></thead>
+        <tbody>{% for family in families %}<tr>
+            <td data-label="Famille"><strong>{{ family.display_name }}</strong></td>
+            <td data-label="Responsable">{{ family.account.get_full_name|default:family.account.email }}<br>{{ family.account.email }}{% if not family.account.is_active %}<br><span class="badge badge-neutral">Compte désactivé</span>{% endif %}</td>
+            <td data-label="Membres">{{ family.active_member_count }} actif{{ family.active_member_count|pluralize }} / {{ family.member_count }} au total</td>
+            <td data-label="Officiels">{{ family.official_count }}</td>
+            <td data-label="Action" class="table-actions"><a class="button button-secondary button-small" href="{% url 'administrator_family_detail' family.pk %}">Ouvrir la fiche famille</a></td>
+        </tr>{% empty %}<tr><td colspan="5">Aucune famille enregistrée.</td></tr>{% endfor %}</tbody>
+    </table></div></section>
+    <a href="{% url 'administration_dashboard' %}">Retour aux réglages</a>
 </div>
 {% endblock %}

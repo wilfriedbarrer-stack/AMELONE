@@ -10,8 +10,7 @@ from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from PIL import Image, UnidentifiedImageError
 
-from .meal_catalogue import menu_options_for_day
-from .models import Event, Family, Member, SiteBranding, User
+from .models import Family, SiteBranding, User
 from .views_organizer import organizer_required
 
 
@@ -33,20 +32,20 @@ class ProfileForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ("email", "first_name", "last_name", "phone", "is_active", "is_competition_official")
+        fields = ("email", "first_name", "last_name", "phone", "is_active")
         labels = {"is_active": "Compte actif"}
-        help_texts = {
-            "is_competition_official": (
-                "Ce profil se cumule avec les droits sélectionnés ci-dessous. "
-                "Si un profil personnel est lié à ce compte, sa fonction est mise à jour. "
-                "Pour les autres personnes, attribuez la fonction individuellement dans Familles et officiels. "
-                "Licence et formation à jour nécessaires."
-            ),
-        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         user = self.instance
+        try:
+            self.family = user.family
+        except Family.DoesNotExist:
+            self.family = None
+        if self.family is not None:
+            # The responsible person's contacts have one editor, on the family record.
+            for field in ("email", "first_name", "last_name", "phone"):
+                self.fields.pop(field)
         self.fields["role"].initial = (
             "administrator" if user.is_superuser else
             "organizer" if user.is_organizer or user.is_staff else "family"
@@ -82,21 +81,12 @@ class LogoForm(forms.Form):
 
 @organizer_required
 def administration_dashboard(request):
-    show_archived = request.GET.get("archives") == "1"
-    events = Event.objects.all()
-    events = events.filter(status=Event.Status.ARCHIVED) if show_archived else events.exclude(status=Event.Status.ARCHIVED)
-    events = events.prefetch_related("days__menus", "stations").order_by("name")
-    for event in events:
-        for day in event.days.all():
-            day.offered_menus = list(menu_options_for_day(day, active_only=False))
-    return render(request, "administration/dashboard.html", {
-        "events": events, "show_archived": show_archived,
-    })
+    return render(request, "administration/dashboard.html")
 
 
 @administrator_required
 def profile_list(request):
-    profiles = User.objects.select_related("family", "participant_profile")
+    profiles = User.objects.select_related("family", "participant_profile__family")
     return render(request, "administration/profiles.html", {"profiles": profiles})
 
 
@@ -124,27 +114,19 @@ def profile_update(request, user_id):
                     form.add_error(None, "Il faut conserver au moins un administrateur actif.")
                 else:
                     try:
-                        # A validation failure on the participant must also roll back
-                        # account rights, permission removals and the legacy role flag.
                         with transaction.atomic():
-                            member = Member.objects.select_for_update().filter(user=profile).first()
                             profile = form.save(commit=False)
                             profile.is_superuser = role == "administrator"
                             profile.is_staff = role == "administrator"
                             profile.is_organizer = role in {"administrator", "organizer"}
-                            if member:
-                                member.is_competition_official = profile.is_competition_official
-                                member.full_clean()
                             profile.save()
-                            if member:
-                                member.save(update_fields=["is_competition_official", "updated_at"])
                             if role == "family":
                                 Family.objects.get_or_create(account=profile)
                             # A role change must remove previously delegated Django permissions.
                             profile.groups.clear()
                             profile.user_permissions.clear()
                     except IntegrityError:
-                        if User.objects.filter(email__iexact=form.cleaned_data["email"]).exclude(pk=profile.pk).exists():
+                        if User.objects.filter(email__iexact=form.cleaned_data.get("email", profile.email)).exclude(pk=profile.pk).exists():
                             form.add_error("email", "Cette adresse e-mail est déjà utilisée.")
                         else:
                             raise
@@ -152,10 +134,10 @@ def profile_update(request, user_id):
                         for message in error.messages:
                             form.add_error(None, message)
                     else:
-                        messages.success(request, "Le profil et ses droits ont été enregistrés.")
+                        messages.success(request, "Les droits du compte ont été enregistrés.")
                         return redirect("profile_list")
     else:
-        profile = get_object_or_404(User, pk=user_id)
+        profile = get_object_or_404(User.objects.select_related("family", "participant_profile__family"), pk=user_id)
         form = ProfileForm(instance=profile)
     return render(request, "administration/profile_form.html", {"form": form, "profile": profile})
 

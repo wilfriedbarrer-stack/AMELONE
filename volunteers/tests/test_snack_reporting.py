@@ -4,6 +4,7 @@ import io
 from django.test import TestCase
 from django.urls import reverse
 
+from volunteers.meal_catalogue import menu_options_for_day
 from volunteers.models import Beverage, MealOrder, Menu, Registration
 from volunteers.participation import save_participation
 from volunteers.services import BusinessRuleError, save_meal_order
@@ -37,12 +38,18 @@ class SnackReportingTests(DataMixin, TestCase):
         self.assertEqual(phases["Collation matin"], 1)
         self.assertEqual(phases["Collation après-midi"], 1)
         self.assertEqual(order.total_surcharge_cents, 225)
-        response = self.client.get(reverse("catering", args=[self.event.pk]))
+        catering_url = reverse("catering", args=[self.event.pk])
+        quantities_url = reverse("recap_meals", args=[self.event.pk]) + "?view=quantities"
+        self.assertRedirects(
+            self.client.get(catering_url, {"view": "quantities"}), quantities_url,
+            fetch_redirect_response=False,
+        )
+        response = self.client.get(catering_url, {"view": "quantities"}, follow=True)
         self.assertContains(response, self.menu.name)
-        self.assertEqual(sum(item["quantity"] for item in response.context["menu_totals"]), 3)
-        self.assertEqual(sum(item["quantity"] for item in response.context["beverage_totals"]), 1)
-        day = list(response.context["event"].days.all())[0]
-        self.assertIn(self.menu, day.offered_menus)
+        self.assertEqual(sum(item["count"] for item in response.context["quantities"]), 3)
+        self.assertEqual(sum(item["count"] for item in response.context["beverage_quantities"]), 1)
+        self.assertIn(self.menu, menu_options_for_day(self.day))
+        self.assertContains(response, reverse("shared_catalogue"))
 
     def test_exports_include_both_snacks_and_preserve_total_column(self):
         self.order()
@@ -60,9 +67,11 @@ class SnackReportingTests(DataMixin, TestCase):
         cancelled = self.order(member=self.other_member)
         cancelled.registration.status = Registration.Status.CANCELLED
         cancelled.registration.save(update_fields=["status"])
-        response = self.client.get(reverse("catering", args=[self.event.pk]))
-        self.assertEqual(len(response.context["orders"]), 1)
-        self.assertEqual(sum(item["quantity"] for item in response.context["menu_totals"]), 3)
+        response = self.client.get(reverse("catering", args=[self.event.pk]), follow=True)
+        self.assertEqual(response.redirect_chain, [(reverse("recap_meals", args=[self.event.pk]), 302)])
+        self.assertEqual(len(response.context["rows"]), 1)
+        self.assertEqual(response.context["rows"][0]["order"].registration.member, self.member)
+        self.assertEqual(sum(item["count"] for item in response.context["quantities"]), 3)
 
     def test_closed_meals_cannot_silently_drop_snacks_from_a_legacy_main_choice(self):
         order = self.order()

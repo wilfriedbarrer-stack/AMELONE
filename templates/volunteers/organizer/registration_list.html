@@ -1,3 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Inscriptions — {{ event.name }}{% endblock %}
-{% block content %}<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">{{ event.name }}</span><h1>Disponibilités déclarées</h1><p>Le souhait ne constitue jamais une affectation.</p></div><a class="button button-primary" href="{% url 'assignment_board_event' event.pk %}">Affecter</a></div></header><div class="shell page-stack"><section class="panel table-panel"><div class="responsive-table"><table><thead><tr><th>Membre</th><th>Jour</th><th>Disponibilité</th><th>Souhait</th><th>Âge</th><th>Statut</th><th></th></tr></thead><tbody>{% for registration in registrations %}<tr><td>{{ registration.member.full_name }}<small>{{ registration.member.family.display_name }}</small></td><td>{{ registration.event_day.date|date:"d/m/Y" }}</td><td>{{ registration.get_availability_display }}</td><td>{{ registration.preferred_station.name|default:"Sans préférence" }}</td><td>{{ registration.age_on_event_day }} ans{% if registration.is_birthday %} 🎂{% endif %}</td><td>{{ registration.get_status_display }}</td><td><a href="{% url 'registration_update' registration.pk %}">Corriger</a></td></tr>{% empty %}<tr><td colspan="7">Aucune inscription.</td></tr>{% endfor %}</tbody></table></div></section></div>{% endblock %}
+{% block title %}Participants — {{ event.name }}{% endblock %}
+{% block content %}
+<header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">{{ event.name }}</span><h1>Participants et présences</h1><p>Retrouvez les disponibilités déclarées. L’affectation confirme le poste attribué.</p></div><a class="button button-primary" href="{% url 'assignment_board_event' event.pk %}">Affecter les postes</a></div></header>
+<div class="shell page-stack">
+  {% include "partials/event_workspace_nav.html" with event_section="participants" %}
+  <div class="button-row"><a class="button button-secondary" href="{% url 'recap_assignments' event.pk %}">Récapitulatif des affectations</a><a class="button button-quiet" href="{% url 'event_emails' event.pk %}">Messages aux participants</a></div>
+  <section class="panel table-panel"><div class="responsive-table"><table><thead><tr><th>Participant</th><th>Date</th><th>Présence</th><th>Poste souhaité</th><th>Âge</th><th>Inscription</th><th>Action</th></tr></thead><tbody>
+  {% for registration in registrations %}<tr>
+    <td data-label="Participant"><strong>{{ registration.member.full_name }}</strong><small>{{ registration.member.family.display_name }}</small></td>
+    <td data-label="Date">{{ registration.event_day.date|date:"d/m/Y" }}</td>
+    <td data-label="Présence">{{ registration.get_availability_display }}</td>
+    <td data-label="Poste souhaité">{{ registration.preferred_station.name|default:"Sans préférence" }}</td>
+    <td data-label="Âge">{{ registration.age_on_event_day }} ans{% if registration.is_birthday %} 🎂{% endif %}</td>
+    <td data-label="Inscription">{{ registration.get_status_display }}</td>
+    <td class="table-actions"><a href="{% url 'registration_update' registration.pk %}">Modifier la présence</a></td>
+  </tr>{% empty %}<tr><td colspan="7">Aucune inscription.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+</div>
+{% endblock %}

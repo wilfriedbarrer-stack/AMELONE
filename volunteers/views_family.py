@@ -273,12 +273,23 @@ def family_event_detail(request, event_id):
             "meal_order__beverage", "meal_order__morning_snack", "meal_order__afternoon_snack",
             "meal_order__morning_beverage", "meal_order__afternoon_beverage",
         )
+        .prefetch_related("assignments__station_slot__station")
         .order_by("event_day__date", "member__last_name", "member__first_name")
     )
     registrations_by_member_and_day = {
         (registration.member_id, registration.event_day_id): registration
         for registration in registrations
     }
+    days = list(event.days.all())
+    member_ids = {member.pk for member in members}
+    display_members = members + [registration.member for registration in registrations
+                                 if registration.member_id not in member_ids]
+    for day in days:
+        day.participants = [{"member": member, "registration": registrations_by_member_and_day.get((member.pk, day.pk))}
+                            for member in dict((member.pk, member) for member in display_members).values()]
+    for registration in registrations:
+        registration.confirmed_assignments = [assignment for assignment in registration.assignments.all()
+                                             if assignment.status == Assignment.Status.CONFIRMED]
     meal_orders = {
         registration.pk: getattr(registration, "meal_order", None)
         for registration in registrations
@@ -290,7 +301,7 @@ def family_event_detail(request, event_id):
         {
             "family": family,
             "event": event,
-            "days": event.days.all(),
+            "days": days,
             "members": members,
             "registrations": registrations,
             "registrations_by_member_and_day": registrations_by_member_and_day,

@@ -34,7 +34,7 @@ def build_event_snapshot(event):
 
     days = list(event.days.order_by("date").prefetch_related("menus", "beverages"))
     if not days:
-        raise ValidationError("Ajoutez une date à l'événement avant d'enregistrer son profil.")
+        raise ValidationError("Ajoutez une date à l'événement avant d'enregistrer son modèle.")
     anchor = datetime.combine(days[0].date, time.min)
     default_timezone = timezone.get_default_timezone()
     windows = {
@@ -106,13 +106,13 @@ def save_event_profile(*, event, name, description=""):
 def _profile_configuration(profile, event_date):
     snapshot = profile.snapshot
     if not isinstance(snapshot, dict) or snapshot.get("version") != 1 or not snapshot.get("days"):
-        raise ValidationError("Ce profil ne contient pas une configuration utilisable.")
+        raise ValidationError("Ce modèle ne contient pas une configuration utilisable.")
     try:
         event_fields = {field: snapshot["event"].get(field, "") for field in _EVENT_FIELDS}
         for field in _EVENT_FLAG_FIELDS:
             value = snapshot["event"].get(field, True)
             if type(value) is not bool:
-                raise ValidationError("Les réglages des boissons de ce profil sont invalides.")
+                raise ValidationError("Les réglages des boissons de ce modèle sont invalides.")
             event_fields[field] = value
         anchor = datetime.combine(event_date, time.min)
         windows = {
@@ -123,7 +123,7 @@ def _profile_configuration(profile, event_date):
             for field in _WINDOW_FIELDS
         }
     except (KeyError, TypeError, ValueError, OverflowError) as error:
-        raise ValidationError("Les dates enregistrées dans ce profil sont invalides.") from error
+        raise ValidationError("Les dates enregistrées dans ce modèle sont invalides.") from error
     return snapshot, event_fields, windows
 
 
@@ -134,7 +134,7 @@ def create_event_from_profile(*, profile, name, event_date):
     try:
         profile = EventProfile.objects.select_for_update(of=("self",)).get(pk=profile.pk)
     except EventProfile.DoesNotExist as error:
-        raise ValidationError("Ce profil d'événement a été supprimé. Rechargez la liste.") from error
+        raise ValidationError("Ce modèle d'événement a été supprimé. Rechargez la liste.") from error
     snapshot, event_fields, windows = _profile_configuration(profile, event_date)
     event = Event(name=name.strip(), status=Event.Status.DRAFT, **event_fields, **windows)
     event.full_clean()
@@ -190,5 +190,5 @@ def create_event_from_profile(*, profile, name, event_date):
                 slot.full_clean()
                 slot.save()
     except (KeyError, TypeError, ValueError, OverflowError) as error:
-        raise ValidationError("Le profil contient une configuration invalide.") from error
+        raise ValidationError("Le modèle contient une configuration invalide.") from error
     return event

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load i18n %}
 {% block title %}Planning public{% if event %} — {{ event.name }}{% endif %} — AMELONE{% endblock %}
 {% block body_class %}public-page{% endblock %}
 {% block content %}
@@ -17,12 +18,12 @@
       <div class="field"><label for="event">Événement</label><select id="event" name="event"><option value="">Choisir</option>{% for option in events %}<option value="{{ option.pk }}"{% if event.pk == option.pk %} selected{% endif %}>{{ option.name }}</option>{% endfor %}</select></div>
       <button class="button button-primary" type="submit">Afficher l’événement</button>
     </form>
-    {% if event %}<form method="get" action="{% url 'public_planning' %}" class="filter-bar planning-filters">
+    {% if event and show_day_filter %}<form method="get" action="{% url 'public_planning' %}" class="filter-bar planning-filters">
       <input type="hidden" name="event" value="{{ event.pk }}">
       {% if family_scope_active %}<input type="hidden" name="scope" value="family">{% endif %}
-      <div class="field"><label for="day">Journée</label><select id="day" name="day">{% for day in days %}<option value="{{ day.pk }}"{% if selected_day.pk == day.pk %} selected{% endif %}>{{ day.date|date:"l j F"|capfirst }}</option>{% empty %}<option value="">Aucune journée précisée</option>{% endfor %}</select></div>
+      <div class="field"><label for="day">Journée</label><select id="day" name="day">{% for day in days %}<option value="{{ day.pk }}"{% if selected_day.pk == day.pk %} selected{% endif %}>{% language "fr" %}{{ day.date|date:"l j F"|capfirst }}{% endlanguage %}</option>{% empty %}<option value="">Aucune journée précisée</option>{% endfor %}</select></div>
       <button class="button button-primary" type="submit">Afficher la journée</button>
-    </form>{% endif %}
+    </form>{% elif selected_day %}<div class="planning-date"><strong>Date de l’événement</strong><p>{% language "fr" %}{{ selected_day.date|date:"l j F Y"|capfirst }}{% endlanguage %}</p></div>{% endif %}
     <div class="privacy-note"><span aria-hidden="true">✓</span><p>Ce planning affiche uniquement les noms et les postes confirmés. Les informations personnelles, les repas et les remarques restent privés.</p></div>
     {% if event %}
       <section class="planning-board" aria-label="Planning des postes">

@@ -60,9 +60,9 @@ class SnackBeverageFormTests(DataMixin, TestCase):
                 self.assertFalse(form.is_valid())
                 self.assertIn(field, form.errors)
 
-    def test_snack_beverage_requires_its_snack_and_rejects_half_day_or_no_meal(self):
+    def test_snack_beverage_requires_its_snack_and_rejects_half_day(self):
         for changes in (
-            {"morning_snack": ""}, {"afternoon_snack": ""}, {"no_meal": "on"},
+            {"morning_snack": ""}, {"afternoon_snack": ""},
             {"availability": "morning", "menu": str(self.snack.pk)},
         ):
             with self.subTest(changes=changes):
@@ -73,6 +73,10 @@ class SnackBeverageFormTests(DataMixin, TestCase):
         self.assertTrue(plain.is_valid(), plain.errors)
         self.assertIsNone(plain.cleaned_data["morning_beverage"])
         self.assertIsNone(plain.cleaned_data["afternoon_beverage"])
+        cleared = FamilyRegistrationForm(self.data(no_meal="on"), event_day=self.day, member=self.member)
+        self.assertTrue(cleared.is_valid(), cleared.errors)
+        for component in MealOrder.PRICE_COMPONENTS:
+            self.assertIsNone(cleared.cleaned_data[component])
 
     def test_foreign_or_inactive_beverage_is_not_a_new_choice(self):
         other_day = EventDay.objects.create(event=self.event, date=self.day.date + timedelta(days=1))
