@@ -5,16 +5,18 @@
 <div class="shell page-stack">
   {% include "partials/event_workspace_nav.html" with event_section="participants" %}
   <div class="button-row"><a class="button button-secondary" href="{% url 'recap_assignments' event.pk %}">Récapitulatif des affectations</a><a class="button button-quiet" href="{% url 'event_emails' event.pk %}">Messages aux participants</a></div>
-  <section class="panel table-panel"><div class="responsive-table"><table><thead><tr><th>Participant</th><th>Date</th><th>Présence</th><th>Poste souhaité</th><th>Âge</th><th>Inscription</th><th>Action</th></tr></thead><tbody>
+  <nav class="section-tabs" aria-label="Filtrer les affectations"><a href="{% url 'registration_list' event.pk %}"{% if not pending_only %} aria-current="page"{% endif %}>Tous les inscrits</a><a href="{% url 'registration_list' event.pk %}?affectation=a_faire"{% if pending_only %} aria-current="page"{% endif %}>À affecter ({{ pending_event_assignment_count }})</a></nav>
+  {% if pending_only %}<p>Cette liste comprend les personnes sans poste et celles dont la présence à la journée n’est affectée que sur une demi-journée.</p>{% endif %}
+  <section class="panel table-panel"><div class="responsive-table"><table class="mobile-card-table"><thead><tr><th>Participant</th><th>Date</th><th>Présence</th><th>Poste souhaité</th><th>Âge</th><th>Inscription</th><th>Action</th></tr></thead><tbody>
   {% for registration in registrations %}<tr>
     <td data-label="Participant"><strong>{{ registration.member.full_name }}</strong><small>{{ registration.member.family.display_name }}</small></td>
     <td data-label="Date">{{ registration.event_day.date|date:"d/m/Y" }}</td>
     <td data-label="Présence">{{ registration.get_availability_display }}</td>
     <td data-label="Poste souhaité">{{ registration.preferred_station.name|default:"Sans préférence" }}</td>
     <td data-label="Âge">{{ registration.age_on_event_day }} ans{% if registration.is_birthday %} 🎂{% endif %}</td>
-    <td data-label="Inscription">{{ registration.get_status_display }}</td>
-    <td class="table-actions"><a href="{% url 'registration_update' registration.pk %}">Modifier la présence</a></td>
-  </tr>{% empty %}<tr><td colspan="7">Aucune inscription.</td></tr>{% endfor %}
+    <td data-label="Inscription">{{ registration.get_status_display }}{% if registration.needs_assignment %}<span class="pending-assignment-badge">{% if registration.has_active_assignment %}Affectation à compléter{% else %}Sans poste{% endif %}</span>{% endif %}</td>
+    <td class="table-actions" data-label="Action">{% if registration.needs_assignment %}<a class="button button-small button-primary" href="{% url 'assignment_create' registration.pk %}">Affecter</a>{% endif %}<a href="{% url 'registration_update' registration.pk %}">Modifier la présence</a></td>
+  </tr>{% empty %}<tr><td colspan="7">{% if pending_only %}Toutes les inscriptions sont affectées.{% else %}Aucune inscription.{% endif %}</td></tr>{% endfor %}
   </tbody></table></div></section>
 </div>
 {% endblock %}

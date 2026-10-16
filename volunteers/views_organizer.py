@@ -15,6 +15,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .capacity import get_slot_capacities
+from .context_processors import request_assignment_attention
 from .event_profiles import create_event_from_profile
 from .forms_organizer import (
     AssignmentForm,
@@ -48,6 +49,7 @@ from .models import (
     Station,
     StationSlot,
 )
+from .registration_attention import annotate_registration_attention
 from .scheduling import (
     event_assignment_conflicts,
     lock_schedule_members,
@@ -92,7 +94,11 @@ def _form_error_messages(error):
 @organizer_required
 def organizer_dashboard(request):
     now = timezone.now()
-    events = Event.objects.exclude(status=Event.Status.ARCHIVED).prefetch_related("days")[:8]
+    attention = request_assignment_attention(request)
+    pending_by_event = {event["event_id"]: event["pending_count"] for event in attention["events"]}
+    events = list(Event.objects.exclude(status=Event.Status.ARCHIVED).prefetch_related("days")[:8])
+    for event in events:
+        event.pending_assignment_count = pending_by_event.get(event.pk, 0)
     upcoming_days = EventDay.objects.filter(date__gte=timezone.localdate()).exclude(
         event__status=Event.Status.ARCHIVED
     ).order_by("date")[:6]
@@ -106,9 +112,8 @@ def organizer_dashboard(request):
             registration_opens_at__lte=now,
             registration_closes_at__gte=now,
         ).count(),
-        "unassigned_count": Registration.objects.filter(status=Registration.Status.ACTIVE)
-        .exclude(assignments__status__in=(Assignment.Status.DRAFT, Assignment.Status.CONFIRMED))
-        .count(),
+        "unassigned_count": attention["pending_count"],
+        "assignment_attention_events": [event for event in attention["events"] if event["pending_count"]],
         "failed_email_count": EmailDelivery.objects.filter(
             status=EmailDelivery.Status.FAILED
         ).count(),
@@ -126,6 +131,13 @@ def event_list(request):
         day_count=Count("days", distinct=True),
         registration_count=Count("days__registrations", distinct=True),
     ).order_by("status", "-registration_opens_at")
+    pending_by_event = {
+        event["event_id"]: event["pending_count"]
+        for event in request_assignment_attention(request)["events"]
+    }
+    events = list(events)
+    for event in events:
+        event.pending_assignment_count = pending_by_event.get(event.pk, 0)
     return render(request, "volunteers/organizer/event_list.html", {
         "events": events, "show_archived": show_archived,
     })
@@ -249,6 +261,10 @@ def event_detail(request, event_id):
             "balances": balances,
             "birthday_alerts": birthday_alerts_for_event(event),
             "email_enabled": settings.EMAIL_ENABLED,
+            "pending_event_assignment_count": next((
+                item["pending_count"] for item in request_assignment_attention(request)["events"]
+                if item["event_id"] == event.pk
+            ), 0),
         },
     )
 
@@ -400,15 +416,25 @@ def station_update(request, station_id):
 @organizer_required
 def registration_list(request, event_id):
     event = get_object_or_404(Event, pk=event_id)
-    registrations = (
+    registrations = annotate_registration_attention(
         Registration.objects.filter(event_day__event=event)
         .select_related("member__family", "event_day", "preferred_station")
         .prefetch_related("assignments__station_slot__station")
     )
+    pending_only = request.GET.get("affectation") == "a_faire"
+    if pending_only:
+        registrations = registrations.filter(needs_assignment=True)
+    pending_count = next((
+        item["pending_count"] for item in request_assignment_attention(request)["events"]
+        if item["event_id"] == event.pk
+    ), 0)
     return render(
         request,
         "volunteers/organizer/registration_list.html",
-        {"event": event, "registrations": registrations},
+        {
+            "event": event, "registrations": registrations, "pending_only": pending_only,
+            "pending_event_assignment_count": pending_count,
+        },
     )
 
 

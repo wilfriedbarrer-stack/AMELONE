@@ -7,6 +7,7 @@
 </div></header>
 <div class="shell page-stack">
   {% include "partials/event_workspace_nav.html" with event_section="stations" %}
+  {% if pending_event_assignment_count %}<div class="alert alert-warning"><div><strong>{{ pending_event_assignment_count }} inscription{{ pending_event_assignment_count|pluralize }} à affecter.</strong> <a href="{% url 'registration_list' event.pk %}?affectation=a_faire">Voir les participants concernés</a></div></div>{% endif %}
   {% for alert in birthday_alerts %}<div class="alert alert-warning">🎂 {{ alert.message }}</div>{% endfor %}
   <section class="panel" id="postes">
     <div class="panel-heading"><div><h2>Postes et créneaux</h2><p>Préparez les capacités, puis répartissez les participants.</p></div><a class="button button-primary" href="{% url 'station_create' event.pk %}">Ajouter un poste</a></div>

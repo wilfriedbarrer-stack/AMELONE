@@ -9,7 +9,7 @@
   <title>{% block title %}AMELONE LOISIRS{% endblock %}</title>
   <meta name="description" content="Gestion des bénévoles et des événements de l’association Amelone Loisirs.">
   <link rel="stylesheet" href="{% static 'css/app.css' %}?v=amelone-loisirs-5">
-  <link rel="stylesheet" href="{% static 'css/ergonomics.css' %}?v=2">
+  <link rel="stylesheet" href="{% static 'css/ergonomics.css' %}?v=3">
   <script src="{% static 'js/navigation.js' %}?v=1" defer></script>
   {% block extra_head %}{% endblock %}
 </head>
@@ -28,6 +28,14 @@
         <a class="nav-planning" href="{{ public_planning_url|default:'/planning/' }}"{% if request.resolver_match.url_name == 'public_planning' %} aria-current="page"{% endif %}>Planning public</a>
         <button class="navigation-toggle" type="button" aria-expanded="false" aria-controls="site-navigation" hidden><span aria-hidden="true">☰</span> Menu</button>
       </div>
+
+      {% if is_organizer and pending_assignment_count %}
+      <a class="assignment-attention-link" href="{% url 'organizer_dashboard' %}#affectations-a-faire">
+        <span class="attention-count">{{ pending_assignment_count }}</span>
+        <span>inscription{{ pending_assignment_count|pluralize }} à affecter</span>
+        <span class="attention-action">Voir les participants →</span>
+      </a>
+      {% endif %}
 
       <div class="site-navigation" id="site-navigation">
       <nav class="primary-nav" aria-label="Navigation principale">
