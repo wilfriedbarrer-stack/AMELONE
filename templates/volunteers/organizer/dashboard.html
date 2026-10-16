@@ -7,12 +7,18 @@
     <article class="stat-card"><span class="stat-value">{{ open_event_count }}</span><span class="stat-label">événement{{ open_event_count|pluralize }} ouvert{{ open_event_count|pluralize }}</span></article>
     <article class="stat-card"><span class="stat-value">{{ family_count }}</span><span class="stat-label">famille{{ family_count|pluralize }}</span></article>
     <article class="stat-card"><span class="stat-value">{{ member_count }}</span><span class="stat-label">membre{{ member_count|pluralize }} actif{{ member_count|pluralize }}</span></article>
-    <article class="stat-card"><span class="stat-value">{{ unassigned_count }}</span><span class="stat-label">participant{{ unassigned_count|pluralize }} à affecter</span></article>
+    <a class="stat-card attention-stat" href="#affectations-a-faire"><span class="stat-value">{{ unassigned_count }}</span><span class="stat-label">inscription{{ unassigned_count|pluralize }} à affecter</span></a>
+  </section>
+  <section class="panel assignment-attention-panel" id="affectations-a-faire" aria-labelledby="assignment-attention-title">
+    <div class="panel-heading"><div><h2 id="assignment-attention-title">{% if pending_assignment_count %}Des participants attendent un poste{% else %}Affectations à jour{% endif %}</h2><p>Les inscriptions sans poste et les présences à la journée encore incomplètes apparaissent ici.</p></div></div>
+    {% for item in assignment_attention_events %}
+    <div class="list-item attention-event"><div><strong>{{ item.event_name }}</strong><small>{{ item.unassigned_count }} sans poste{% if item.partial_count %} · {{ item.partial_count }} à compléter{% endif %}</small></div><a class="button button-secondary button-small" href="{% url 'registration_list' item.event_id %}?affectation=a_faire">{{ item.pending_count }} à affecter</a></div>
+    {% empty %}<p>Aucune inscription en attente d’affectation pour les événements à venir.</p>{% endfor %}
   </section>
   {% if failed_email_count %}<div class="alert alert-error"><strong>{{ failed_email_count }} message{{ failed_email_count|pluralize }} en échec.</strong> Ouvrez l’événement concerné, puis « Autres actions → Messages aux participants ».</div>{% endif %}
   <section class="panel table-panel"><div class="panel-heading"><div><h2>Événements à gérer</h2></div><a href="{% url 'event_list' %}">Tous les événements</a></div>
     <div class="responsive-table"><table class="mobile-card-table"><thead><tr><th>Événement</th><th>Lieu</th><th>Statut</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>
-      {% for event in events %}<tr><td data-label="Événement"><strong><a href="{% url 'event_detail' event.pk %}">{{ event.name }}</a></strong></td><td data-label="Lieu">{{ event.location }}</td><td data-label="Statut"><span class="badge badge-neutral">{{ event.get_status_display }}</span></td><td class="table-actions" data-label="Actions"><a href="{% url 'event_detail' event.pk %}">Ouvrir</a></td></tr>
+      {% for event in events %}<tr><td data-label="Événement"><strong><a href="{% url 'event_detail' event.pk %}">{{ event.name }}</a></strong>{% if event.pending_assignment_count %}<a class="pending-assignment-badge" href="{% url 'registration_list' event.pk %}?affectation=a_faire">{{ event.pending_assignment_count }} à affecter</a>{% endif %}</td><td data-label="Lieu">{{ event.location }}</td><td data-label="Statut"><span class="badge badge-neutral">{{ event.get_status_display }}</span></td><td class="table-actions" data-label="Actions"><a href="{% url 'event_detail' event.pk %}">Ouvrir</a></td></tr>
       {% empty %}<tr><td colspan="4">Aucun événement. Créez votre premier événement pour commencer.</td></tr>{% endfor %}
     </tbody></table></div>
   </section>

@@ -1,6 +1,21 @@
 from django.conf import settings
 
 from .models import SiteBranding
+from .registration_attention import get_registration_attention
+
+
+def request_assignment_attention(request):
+    """Share one read-only summary across the view and navigation rendering."""
+    if not hasattr(request, "_assignment_attention"):
+        user = request.user
+        can_manage = user.is_authenticated and user.is_active and (
+            user.is_staff or getattr(user, "is_organizer", False)
+        )
+        request._assignment_attention = get_registration_attention() if can_manage else {
+            "pending_count": 0, "unassigned_count": 0, "partial_count": 0,
+            "draft_registration_count": 0, "events": [],
+        }
+    return request._assignment_attention
 
 
 def _navigation_section(request):
@@ -34,7 +49,10 @@ def _navigation_section(request):
 
 
 def navigation_context(request):
+    attention = request_assignment_attention(request)
     return {
+        "assignment_attention": attention,
+        "pending_assignment_count": attention["pending_count"],
         "navigation_section": _navigation_section(request),
         "debug_mode": settings.DEBUG,
         "association_logo": SiteBranding.objects.filter(pk=1).values_list("logo_data", flat=True).first() or "",
