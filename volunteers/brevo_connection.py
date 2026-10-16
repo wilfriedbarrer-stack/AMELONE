@@ -6,6 +6,7 @@ sender addresses, credentials, response bodies and exceptions are never exposed.
 """
 
 import json
+import re
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener
 
@@ -24,6 +25,22 @@ _ENDPOINTS = {
 }
 _TIMEOUT_SECONDS = 10
 _MAX_RESPONSE_BYTES = 65536
+_FORBIDDEN_PATTERNS = {
+    "ip_not_authorized": re.compile(
+        r"\b(?:unrecognised|unrecognized|unauthori[sz]ed) ip(?: address)?\b"
+        r"|\bip(?: address)? (?:is )?(?:not authori[sz]ed|unrecognised|unrecognized|unauthori[sz]ed)\b",
+    ),
+    "account_suspended": re.compile(r"\baccount (?:(?:is|has been) )?suspended\b"),
+    "activation_required": re.compile(
+        r"\b(?:account )?activation (?:is )?required\b"
+        r"|\baccount (?:is )?not (?:yet )?activated\b",
+    ),
+    "permissions_missing": re.compile(
+        r"\b(?:insufficient|missing) (?:permissions?|scopes?)\b"
+        r"|\b(?:permissions?|scopes?) (?:are |is )?missing\b"
+        r"|\b(?:does not have|lacks?) (?:the )?(?:required )?(?:permissions?|scopes?)\b",
+    ),
+}
 
 
 class _CheckFailure(Exception):
@@ -42,6 +59,35 @@ def _http_reason(status):
     return "unexpected_http_status"
 
 
+def _forbidden_reason(response):
+    """Classify a bounded 403 body in memory, without exposing any of its text.
+
+    Only explicit phrases in JSON code/message fields produce a more specific
+    diagnostic. Unknown, conflicting or unreadable responses stay access_denied.
+    """
+    try:
+        raw = response.read(_MAX_RESPONSE_BYTES + 1)
+        if len(raw) > _MAX_RESPONSE_BYTES:
+            return "access_denied"
+        payload = json.loads(raw)
+        if not isinstance(payload, dict):
+            return "access_denied"
+        texts = [
+            " ".join(re.sub(r"[_-]+", " ", payload[field].casefold()).split())
+            for field in ("code", "message") if isinstance(payload.get(field), str)
+        ]
+        reasons = {
+            reason for reason, pattern in _FORBIDDEN_PATTERNS.items()
+            if any(pattern.search(text) for text in texts)
+        }
+        if len(reasons) == 1:
+            return reasons.pop()
+    except Exception:
+        # Provider bodies, parsing failures and I/O exceptions remain private.
+        pass
+    return "access_denied"
+
+
 def _get(endpoint):
     try:
         request = Request(
@@ -51,15 +97,20 @@ def _get(endpoint):
         )
         with build_opener(_NoRedirect()).open(request, timeout=_TIMEOUT_SECONDS) as response:
             if response.status != 200:
-                raise _CheckFailure(_http_reason(response.status))
+                reason = _forbidden_reason(response) if response.status == 403 else _http_reason(response.status)
+                raise _CheckFailure(reason)
             raw = response.read(_MAX_RESPONSE_BYTES + 1)
             if len(raw) > _MAX_RESPONSE_BYTES:
                 raise _CheckFailure("response_too_large")
     except _CheckFailure:
         raise
     except HTTPError as error:
-        reason = _http_reason(error.code)
-        error.close()
+        reason = _forbidden_reason(error) if error.code == 403 else _http_reason(error.code)
+        try:
+            error.close()
+        except Exception:
+            # A close failure must not expose provider details or an exception.
+            pass
         raise _CheckFailure(reason) from None
     except URLError as error:
         reason = "network_timeout" if isinstance(error.reason, TimeoutError) else "connection_failed"

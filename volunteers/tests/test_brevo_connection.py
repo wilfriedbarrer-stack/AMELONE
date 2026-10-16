@@ -48,6 +48,7 @@ class BrevoConnectionTests(SimpleTestCase):
         for sensitive in (
             "fake-brevo-key-not-a-secret", "sender@example.test", "private@example.test",
             "PRIVATE-RAW-BODY", "PRIVATE-ERROR", "SECRET-REDIRECT",
+            "192.0.2.123", "2001:db8::123",
         ):
             self.assertNotIn(sensitive, rendered)
         self.assertEqual(set(result), {
@@ -148,6 +149,111 @@ class BrevoConnectionTests(SimpleTestCase):
                     self.assertEqual(result["reason"], reason)
                     self.assertTrue(body.closed)
                     self.assert_safe(result)
+
+    def test_forbidden_body_classifies_only_explicit_safe_reasons(self):
+        for payload, reason in (
+            ({"message": "You are using an unrecognised IP address 192.0.2.123."}, "ip_not_authorized"),
+            ({"message": "You are using an unrecognized IP address 2001:db8::123."}, "ip_not_authorized"),
+            ({"message": "Unauthorized IP address 192.0.2.123."}, "ip_not_authorized"),
+            ({"message": "IP address is not authorised: 192.0.2.123."}, "ip_not_authorized"),
+            ({"code": "ip_not_authorized"}, "ip_not_authorized"),
+            ({"message": "Your account has been suspended."}, "account_suspended"),
+            ({"code": "account_suspended"}, "account_suspended"),
+            ({"message": "Your SMTP account is not yet activated."}, "activation_required"),
+            ({"code": "account_activation_required"}, "activation_required"),
+            ({"message": "Insufficient permissions to access senders."}, "permissions_missing"),
+            ({"code": "missing_scope"}, "permissions_missing"),
+            ({"message": "The API key does not have the required permissions."}, "permissions_missing"),
+            ({"code": "unauthorized", "message": "You are not authorized to access this resource."}, "access_denied"),
+            ({"code": "account_disabled"}, "access_denied"),
+            ({"code": "unrecognised", "message": "IP address"}, "access_denied"),
+            ({"other": "unrecognized IP address", "message": 403}, "access_denied"),
+            ({"code": "account_suspended", "message": "Missing permissions."}, "access_denied"),
+        ):
+            with self.subTest(reason=reason):
+                payload = {**payload, "private": "fake-brevo-key-not-a-secret private@example.test PRIVATE-RAW-BODY"}
+                body = io.BytesIO(json.dumps(payload).encode())
+                error = HTTPError("https://SECRET-REDIRECT", 403, "PRIVATE-ERROR", {}, body)
+                self.opener.open.side_effect = [self.response({"relay": {"enabled": True}}), error]
+                result = check_brevo_connection()
+                self.assertEqual(result["reason"], reason)
+                self.assertTrue(result["account_authenticated"])
+                self.assertIs(result["transactional_relay_enabled"], True)
+                self.assertFalse(result["sender_validated"])
+                self.assertFalse(result["ready"])
+                self.assertTrue(body.closed)
+                self.assert_safe(result)
+
+    def test_forbidden_body_is_bounded_and_malformed_body_stays_access_denied(self):
+        classified = json.dumps({"message": "Unrecognized IP address 192.0.2.123"}).encode()
+        for raw, reason in (
+            (b"<html>unrecognized IP address PRIVATE-RAW-BODY</html>", "access_denied"),
+            (b"\xff", "access_denied"), (b"[]", "access_denied"),
+            (b"[" * 2000 + b"]" * 2000, "access_denied"),
+            (classified + b" " * (65536 - len(classified)), "ip_not_authorized"),
+            (classified + b" " * (65537 - len(classified)), "access_denied"),
+        ):
+            with self.subTest(reason=reason, size=len(raw)):
+                body = io.BytesIO(raw)
+                error = HTTPError("https://SECRET-REDIRECT", 403, "PRIVATE-ERROR", {}, body)
+                self.opener.open.side_effect = error
+                with patch.object(body, "read", wraps=body.read) as read:
+                    result = check_brevo_connection()
+                    read.assert_called_once_with(65537)
+                self.assertEqual(result["reason"], reason)
+                self.assertFalse(result["ready"])
+                self.assertTrue(body.closed)
+                self.assert_safe(result)
+
+    def test_forbidden_body_read_and_close_errors_do_not_escape(self):
+        body = io.BytesIO(b"PRIVATE-RAW-BODY")
+        error = HTTPError("https://SECRET-REDIRECT", 403, "PRIVATE-ERROR", {}, body)
+        self.opener.open.side_effect = error
+        with (
+            patch.object(body, "read", side_effect=OSError("PRIVATE-ERROR")),
+            patch.object(error, "close", side_effect=OSError("PRIVATE-ERROR")) as close,
+        ):
+            result = check_brevo_connection()
+            close.assert_called_once_with()
+        body.close()
+        self.assertEqual(result["reason"], "access_denied")
+        self.assert_safe(result)
+
+    def test_forbidden_body_does_not_change_other_http_status_reasons(self):
+        for status, reason in ((401, "invalid_api_key"), (429, "provider_unavailable")):
+            with self.subTest(status=status):
+                body = io.BytesIO(b'{"message":"Unrecognized IP address 192.0.2.123"}')
+                error = HTTPError("https://SECRET-REDIRECT", status, "PRIVATE-ERROR", {}, body)
+                self.opener.open.side_effect = error
+                with patch.object(body, "read", wraps=body.read) as read:
+                    result = check_brevo_connection()
+                    read.assert_not_called()
+                self.assertEqual(result["reason"], reason)
+                self.assertTrue(body.closed)
+                self.assert_safe(result)
+
+    def test_forbidden_normal_response_uses_the_same_safe_classifier(self):
+        context = self.response({"message": "Unrecognized IP address 192.0.2.123"}, status=403)
+        self.opener.open.side_effect = [context]
+        result = check_brevo_connection()
+        self.assertEqual(result["reason"], "ip_not_authorized")
+        self.assertFalse(result["account_authenticated"])
+        context.__enter__.return_value.read.assert_called_once_with(65537)
+        self.assert_safe(result)
+
+    def test_command_prints_only_safe_diagnostic_for_forbidden_body_with_private_data(self):
+        body = io.BytesIO(json.dumps({
+            "message": "Unrecognized IP address 192.0.2.123 for private@example.test fake-brevo-key-not-a-secret",
+            "code": "PRIVATE-RAW-BODY",
+        }).encode())
+        self.opener.open.side_effect = HTTPError("https://SECRET-REDIRECT", 403, "PRIVATE-ERROR", {}, body)
+        output = io.StringIO()
+        call_command("check_brevo_connection", no_fail=True, stdout=output)
+        lines = output.getvalue().splitlines()
+        self.assertEqual(len(lines), 1)
+        result = json.loads(lines[0].partition(" ")[2])
+        self.assertEqual(result["reason"], "ip_not_authorized")
+        self.assert_safe(result)
 
     def test_network_failures_are_safe_and_timeouts_are_distinct(self):
         for error, reason in (
