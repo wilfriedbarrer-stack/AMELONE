@@ -302,7 +302,9 @@ class EventNotificationTests(DataMixin, TestCase):
         self.email.assert_called_once()
         self.assertEqual(self.email.call_args.kwargs["to"], self.other_user.email)
         self.assertIn("les disponibilités ne s’additionnent pas", self.email.call_args.kwargs["body"])
-        self.assertEqual(self.email.call_args.kwargs["body"].count("1 place(s)."), 3)
+        self.assertEqual(self.email.call_args.kwargs["body"].count(": 1 libre."), 2)
+        self.assertIn(": 1 possible dans ces mêmes places.", self.email.call_args.kwargs["body"])
+        self.assertEqual(self.email.call_args.kwargs["body"].count(self.station.name), 1)
         self.sms.assert_not_called()
 
     def test_cancelled_full_day_assignment_or_registration_does_not_occupy_shared_places(self):

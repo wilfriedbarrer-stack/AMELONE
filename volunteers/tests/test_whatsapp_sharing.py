@@ -122,7 +122,9 @@ class WhatsAppSharingTests(DataMixin, TestCase):
         self.assertIn("Journée", result["body_text"])
         self.assertIn("Matin", result["body_text"])
         self.assertIn("Après-midi", result["body_text"])
-        self.assertEqual(result["body_text"].count(": 1 place(s)"), 3)
+        self.assertEqual(result["body_text"].count(": 1 libre"), 2)
+        self.assertIn(": 1 possible dans ces mêmes places", result["body_text"])
+        self.assertEqual(result["body_text"].count(self.station.name), 1)
         self.assertIn("les disponibilités ne s’additionnent pas", result["body_text"])
         self.assertIn("Merci pour votre aide et votre bonne humeur 💚", result["body_text"])
 

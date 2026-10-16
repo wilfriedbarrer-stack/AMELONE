@@ -13,6 +13,7 @@ from .event_notifications import (
     VACANCY_REMINDER,
     _french_date,
     _vacancies,
+    group_vacancies,
 )
 from .models import Event
 
@@ -81,16 +82,25 @@ def whatsapp_preview(event, kind, *, now=None, vacancies=None, event_url=None):
         lines.extend(["", "Places disponibles au moment de préparer ce message :"])
         if any(item.get("shared_places") for item in vacancies[:MAX_SHARED_SLOTS]):
             lines.append(SHARED_PLACES_NOTE)
-        for vacancy in vacancies[:MAX_SHARED_SLOTS]:
-            hours = (
-                f" · {vacancy['start_time']:%H:%M}–{vacancy['end_time']:%H:%M}"
-                if vacancy["start_time"] and vacancy["end_time"] else ""
-            )
-            category = " · Officiel" if vacancy["is_official"] else ""
+        for group in group_vacancies(vacancies[:MAX_SHARED_SLOTS]):
+            category = " · Officiel" if group["is_official"] else ""
+            capacity_label = f" · {group['capacity_label']}" if group["capacity_label"] else ""
             lines.append(
-                f"• {vacancy['date']:%d/%m} · {_single_line(vacancy['station_name'], 70)} · "
-                f"{vacancy['period']}{hours}{category} : {vacancy['remaining']} place(s)"
+                f"• {group['date']:%d/%m} · {_single_line(group['station_name'], 70)}"
+                f"{category}{capacity_label}"
             )
+            for vacancy in group["options"]:
+                hours = (
+                    f" · {vacancy['start_time']:%H:%M}–{vacancy['end_time']:%H:%M}"
+                    if vacancy["start_time"] and vacancy["end_time"] else ""
+                )
+                full_day = (vacancy.get("period_code") or vacancy["period"]) in ("full_day", "Journée")
+                if group["shared_places"] and full_day:
+                    available = "possible" if vacancy["remaining"] == 1 else "possibles"
+                    available += " dans ces mêmes places"
+                else:
+                    available = "libre" if vacancy["remaining"] == 1 else "libres"
+                lines.append(f"  {vacancy['period']}{hours} : {vacancy['remaining']} {available}")
         if len(vacancies) > MAX_SHARED_SLOTS:
             lines.append(f"… et {len(vacancies) - MAX_SHARED_SLOTS} autre(s) créneau(x), à consulter sur le site.")
         if any(item["is_official"] for item in vacancies):

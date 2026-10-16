@@ -13,6 +13,11 @@
 .notification-message [role="status"] { margin: 0; min-height: 1.5em; }
 .notification-email { margin-top: 1rem; }
 .notification-email .detail-grid { margin-bottom: 1.25rem; }
+.vacancy-options { display: grid; gap: .7rem; margin: 0; padding: 0; list-style: none; }
+.vacancy-options li + li { padding-top: .7rem; border-top: 1px solid var(--line); }
+.vacancy-options small { display: block; }
+.notification-vacancy-table td[data-label="Poste"] small { display: block; margin-top: .25rem; }
+.notification-vacancy-table td[data-label="Date"] { white-space: nowrap; }
 </style>
 <script src="{% static 'js/whatsapp-sharing.js' %}?v=2" defer></script>
 {% endblock %}
@@ -78,14 +83,15 @@
       <summary>Voir tous les créneaux à pourvoir</summary>
       {% if card.preview.vacancies %}
       {% if card.preview.has_shared_places %}<p class="help-text">{{ card.preview.shared_places_note }}</p>{% endif %}
-      <div class="responsive-table"><table>
-        <thead><tr><th>Poste</th><th>Date</th><th>Période</th><th>Horaires</th><th>Places libres</th></tr></thead>
-        <tbody>{% for vacancy in card.preview.vacancies %}<tr>
-          <td data-label="Poste">{{ vacancy.station_name }}{% if vacancy.is_official %}<small>Officiel — licence et formation à jour nécessaires</small>{% endif %}</td>
-          <td data-label="Date">{{ vacancy.date|date:"d/m/Y" }}</td>
-          <td data-label="Période">{{ vacancy.period }}</td>
-          <td data-label="Horaires">{% if vacancy.start_time and vacancy.end_time %}{{ vacancy.start_time|time:"H:i" }}–{{ vacancy.end_time|time:"H:i" }}{% else %}À préciser{% endif %}</td>
-          <td data-label="Places libres">{{ vacancy.remaining }}</td>
+      <div class="responsive-table"><table class="notification-vacancy-table">
+        <thead><tr><th>Poste et places partagées</th><th>Date</th><th>Disponibilités selon la présence</th></tr></thead>
+        <tbody>{% for group in card.preview.vacancy_groups %}<tr>
+          <td data-label="Poste"><div><strong>{{ group.station_name }}</strong>{% if group.capacity_label %}<small>{{ group.capacity_label }}</small>{% endif %}{% if group.is_official %}<small>Officiel — licence et formation à jour nécessaires</small>{% endif %}</div></td>
+          <td data-label="Date">{{ group.date|date:"d/m/Y" }}</td>
+          <td data-label="Présence"><ul class="vacancy-options">{% for option in group.options %}<li>
+            <strong>{% if not forloop.first %}ou {% endif %}{{ option.period }} : {{ option.remaining }} {% if option.period_code == 'full_day' and group.shared_places %}possible{{ option.remaining|pluralize }} dans ces mêmes places{% else %}place{{ option.remaining|pluralize }} libre{{ option.remaining|pluralize }}{% endif %}</strong>
+            <small>{% if option.start_time and option.end_time %}{{ option.start_time|time:"H:i" }}–{{ option.end_time|time:"H:i" }}{% else %}Horaires à préciser{% endif %}</small>
+          </li>{% endfor %}</ul></td>
         </tr>{% endfor %}</tbody>
       </table></div>
       {% else %}<p>Aucune place libre à proposer actuellement.</p>{% endif %}
@@ -97,7 +103,7 @@
       <p>{{ card.description }}</p>
       <dl class="detail-grid">
         <div><dt>Familles concernées par l’e-mail</dt><dd>{{ card.preview.recipient_count }}</dd></div>
-        <div><dt>Créneaux avec des places</dt><dd>{{ card.vacant_slot_count }}</dd></div>
+        <div><dt>Postes avec des places</dt><dd>{{ card.vacant_post_count }}</dd></div>
         <div><dt>Déclenchement de l’e-mail</dt><dd>{% if card.scheduled_for %}{{ card.scheduled_for|date:"d/m/Y à H:i" }}{% else %}À la première publication{% endif %}</dd></div>
         {% if card.campaign.prepared_at %}<div><dt>Campagne préparée</dt><dd>{{ card.campaign.prepared_at|date:"d/m/Y à H:i" }}</dd></div>{% endif %}
       </dl>

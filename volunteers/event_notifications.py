@@ -67,13 +67,63 @@ def _vacancies(event, now):
         if StationSlot.Period.FULL_DAY in choices and len(choices) > 1
     }
     return [{
-        "slot_id": slot.pk, "station_name": slot.station.name,
+        "slot_id": slot.pk, "station_id": slot.station_id,
+        "station_name": slot.station.name,
         "date": slot.event_day.date, "period": slot.get_period_display(),
+        "period_code": slot.period,
         "start_time": slot.start_time, "end_time": slot.end_time,
         "remaining": capacities[slot.pk].remaining,
+        "morning_capacity": capacities[slot.pk].morning_capacity,
+        "afternoon_capacity": capacities[slot.pk].afternoon_capacity,
         "is_official": slot.station.category == "official",
         "shared_places": (slot.station_id, slot.event_day_id) in shared_groups,
     } for slot in slots if capacities[slot.pk].remaining > 0]
+
+
+def group_vacancies(vacancies):
+    """Présente les options d'un poste et d'une date sans additionner ses places.
+
+    Les dictionnaires d'origine restent intacts, notamment leurs disponibilités.
+    Le nom sert de repli aux aperçus personnalisés sans identifiant de poste.
+    """
+    groups = {}
+    order = {"morning": 0, "Matin": 0, "afternoon": 1, "Après-midi": 1,
+             "full_day": 2, "Journée": 2}
+    for vacancy in vacancies:
+        identity = (
+            ("id", vacancy["station_id"]) if vacancy.get("station_id") is not None
+            else ("name", vacancy["station_name"])
+        )
+        key = (*identity, vacancy["date"])
+        if key not in groups:
+            groups[key] = {
+                "station_name": vacancy["station_name"], "date": vacancy["date"],
+                "is_official": False, "shared_places": False,
+                "capacity_label": "", "options": [],
+            }
+        group = groups[key]
+        group["is_official"] |= bool(vacancy.get("is_official"))
+        group["shared_places"] |= bool(vacancy.get("shared_places"))
+        group["options"].append(vacancy)
+    for group in groups.values():
+        group["options"].sort(key=lambda option: order.get(
+            option.get("period_code") or option["period"], 99,
+        ))
+        if group["shared_places"]:
+            capacities = next((option for option in group["options"] if (
+                option.get("morning_capacity") is not None
+                and option.get("afternoon_capacity") is not None
+            )), None)
+            if capacities is not None:
+                morning = capacities["morning_capacity"]
+                afternoon = capacities["afternoon_capacity"]
+                places = "place" if morning == 1 else "places"
+                if morning == afternoon:
+                    shared = "partagée" if morning == 1 else "partagées"
+                    group["capacity_label"] = f"{morning} {places} {shared}"
+                else:
+                    group["capacity_label"] = f"{morning} {places} le matin · {afternoon} l’après-midi"
+    return list(groups.values())
 
 
 def _audience(event, kind):
@@ -99,6 +149,7 @@ def notification_preview(event, kind, *, now=None):
         raise ValueError("Type de notification inconnu.")
     now = now or timezone.now()
     vacancies = _vacancies(event, now)
+    vacancy_groups = group_vacancies(vacancies)
     has_shared_places = any(item["shared_places"] for item in vacancies)
     event_url = settings.SITE_URL.rstrip("/") + reverse("family_event_detail", args=[event.pk])
     dates = list(event.days.order_by("date").values_list("date", flat=True))
@@ -133,15 +184,21 @@ def notification_preview(event, kind, *, now=None):
         lines.extend(["", "Les places disponibles au moment de cet envoi :"])
         if has_shared_places:
             lines.append(SHARED_PLACES_NOTE)
-        for vacancy in vacancies:
-            hours = (
-                f" · {vacancy['start_time']:%H:%M}–{vacancy['end_time']:%H:%M}"
-                if vacancy["start_time"] and vacancy["end_time"] else ""
-            )
-            lines.append(
-                f"- {_french_date(vacancy['date'])} : {vacancy['station_name']} · "
-                f"{vacancy['period']}{hours} · {vacancy['remaining']} place(s)."
-            )
+        for group in vacancy_groups:
+            capacity_label = f" · {group['capacity_label']}" if group["capacity_label"] else ""
+            lines.append(f"- {_french_date(group['date'])} : {group['station_name']}{capacity_label}")
+            for vacancy in group["options"]:
+                hours = (
+                    f" · {vacancy['start_time']:%H:%M}–{vacancy['end_time']:%H:%M}"
+                    if vacancy["start_time"] and vacancy["end_time"] else ""
+                )
+                full_day = (vacancy.get("period_code") or vacancy["period"]) in ("full_day", "Journée")
+                if group["shared_places"] and full_day:
+                    available = "possible" if vacancy["remaining"] == 1 else "possibles"
+                    available += " dans ces mêmes places"
+                else:
+                    available = "libre" if vacancy["remaining"] == 1 else "libres"
+                lines.append(f"  {vacancy['period']}{hours} : {vacancy['remaining']} {available}.")
         if any(item["is_official"] for item in vacancies):
             lines.append("Postes officiels : habilitation, licence et formation à jour nécessaires.")
     lines.extend(["", f"Consulter l'événement et s'inscrire : {event_url}", "", "Merci et à bientôt,", "L’équipe AMELONE Loisirs"])
@@ -149,7 +206,8 @@ def notification_preview(event, kind, *, now=None):
     sms_text = f"AMELONE : {sms_intro} - {short_name}. {event_url}"
     return {
         "subject": subject, "body_text": "\n".join(lines), "sms_text": sms_text,
-        "vacancies": vacancies, "has_shared_places": has_shared_places,
+        "vacancies": vacancies, "vacancy_groups": vacancy_groups,
+        "has_shared_places": has_shared_places,
         "shared_places_note": SHARED_PLACES_NOTE,
         "recipient_count": _audience(event, kind).count(),
         "event_url": event_url, "scheduled_for": (

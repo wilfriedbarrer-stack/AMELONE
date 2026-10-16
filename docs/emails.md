@@ -31,6 +31,12 @@ prétendre filtrer le groupe. La liste est limitée à huit créneaux et quatre
 dates, avec un lien vers le détail complet. Les places peuvent changer après la
 préparation du message.
 
+Les disponibilités sont regroupées par poste et par date. Avec 4 places communes
+et une personne déjà affectée l’après-midi, le même poste affiche 4 places libres
+le matin, 3 l’après-midi et 3 possibles à la journée dans ces mêmes places. Ces
+choix ne représentent pas 10 places à pourvoir. Le tableau et les messages
+WhatsApp/email présentent le poste une seule fois avec ses choix de présence.
+
 Le partage demande un événement publié, avec une journée présente ou future et
 une clôture à venir. Le rappel exige aussi des inscriptions ouvertes et des
 places libres. Il fonctionne indépendamment des réglages email. Aucun envoi
