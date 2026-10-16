@@ -98,13 +98,21 @@ stockée sur le serveur et l'expéditeur configuré, via les lectures HTTPS Brev
 aucune notification et n'envoie aucun email. Sa sortie contient seulement des
 états et un motif générique, sans clé, adresse de compte ni réponse brute.
 
-Pour un contrôle ponctuel sur Render, définir `BREVO_VERIFY_ON_DEPLOY=1`, en
+Pour un contrôle ponctuel sur Render, définir `BREVO_VERIFY_ON_START=1`, en
 gardant `EMAIL_ENABLED=0` et `EVENT_NOTIFICATIONS_ENABLED=0`. Le déploiement
-effectue la vérification et écrit un résultat `BREVO_CONNECTION_CHECK` dans ses
-journaux. Le contrôle ne bloque pas la publication de WhatsApp si Brevo n'est
-pas prêt. Après un résultat positif, remettre `BREVO_VERIFY_ON_DEPLOY=0` avant
+effectue la vérification au démarrage du service web, depuis le même contexte
+réseau que les emails, et écrit un résultat `BREVO_CONNECTION_CHECK` dans ses
+journaux. Le contrôle tourne une seule fois par démarrage du serveur, dans un
+sous-processus borné à 25 secondes ; il ne bloque pas la publication de WhatsApp
+si Brevo n'est pas prêt. Après un résultat positif, remettre `BREVO_VERIFY_ON_START=0` avant
 d'activer les emails. Le contrôle confirme l'accès au compte et la validation
 de l'expéditeur, pas la livraison d'un message.
+
+L'ancienne sonde de build `BREVO_VERIFY_ON_DEPLOY` n'est plus utilisée : les
+serveurs de construction peuvent avoir des adresses IP différentes du service
+web. Une erreur 403 est classée sans afficher la réponse du prestataire, afin
+de distinguer une IP non autorisée, un compte suspendu ou en attente d'activation,
+des droits insuffisants et un refus générique.
 
 ### Variables de l’application
 
