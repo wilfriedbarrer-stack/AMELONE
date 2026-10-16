@@ -114,6 +114,20 @@ web. Une erreur 403 est classée sans afficher la réponse du prestataire, afin
 de distinguer une IP non autorisée, un compte suspendu ou en attente d'activation,
 des droits insuffisants et un refus générique.
 
+Si la consultation des expéditeurs est refusée, l'option
+`python manage.py check_brevo_connection --sandbox` teste aussi l'accès à
+`POST /smtp/email`. Le corps de cette requête fixe toujours l'en-tête Brevo
+`X-Sib-Sandbox` à `drop` et utilise uniquement l'adresse expéditrice comme
+destinataire. Aucun email n'est distribué. La sortie ajoute `sandbox_accepted`
+et `sandbox_reason` ; elle ne change pas le résultat `ready` du contrôle des
+expéditeurs. Une acceptation confirme seulement l'accès et le format de la
+requête, pas la livraison ni la validation de l'expéditeur.
+
+Sur Render, `BREVO_VERIFY_SANDBOX_ON_START=1` demande ce contrôle au démarrage,
+dans un sous-processus borné à 40 secondes. Remettre ensuite les deux variables
+`BREVO_VERIFY_ON_START` et `BREVO_VERIFY_SANDBOX_ON_START` à `0`.
+Source : [mode sandbox Brevo](https://developers.brevo.com/docs/using-sandbox-mode).
+
 ### Variables de l’application
 
 Le transport lit les variables suivantes. L’exemple conserve tous les envois

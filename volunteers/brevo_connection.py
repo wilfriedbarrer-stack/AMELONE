@@ -1,8 +1,8 @@
-"""Read-only Brevo authentication and sender check, without database access.
+"""Brevo connection diagnostics without database access or actual email sends.
 
-Only the two fixed GET endpoints below are permitted. Returned diagnostics are
-deliberately limited to booleans and fixed reason codes: account information,
-sender addresses, credentials, response bodies and exceptions are never exposed.
+Default checks use only two fixed GET endpoints. An optional, separate sandbox
+check posts a fixed request with Brevo's immutable drop header. Returned
+diagnostics contain no credentials, personal information or provider responses.
 """
 
 import json
@@ -128,7 +128,7 @@ def _get(endpoint):
     return payload
 
 
-def check_brevo_connection():
+def _check_read_only_connection():
     """Check credentials and the configured sender, without sending anything.
 
     The email and global notification switches may remain disabled during this
@@ -176,4 +176,91 @@ def check_brevo_connection():
         result["reason"] = "sender_not_validated" if matched else "sender_not_found"
     except _CheckFailure as error:
         result["reason"] = str(error)
+    return result
+
+
+def _sandbox_request():
+    """POST only Brevo's documented drop request, addressed to the sender itself.
+
+    No caller can supply recipients, content, an endpoint or alternative headers.
+    Sandbox acceptance confirms request format, never delivery or sender status.
+    """
+    if not _brevo_key_present():
+        raise _CheckFailure("key_not_configured")
+    if getattr(settings, "EMAIL_PROVIDER", "") != "brevo":
+        raise _CheckFailure("provider_not_brevo")
+    try:
+        sender = _sender()
+    except NotificationTransportError:
+        raise _CheckFailure("sender_not_configured") from None
+    payload = {
+        "sender": sender,
+        "to": [{"email": sender["email"]}],
+        "headers": {"X-Sib-Sandbox": "drop"},
+        "subject": "AMELONE - vérification technique sandbox",
+        "textContent": "Vérification technique en mode sandbox, sans envoi.",
+    }
+    try:
+        request = Request(
+            "https://api.brevo.com/v3/smtp/email",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "accept": "application/json", "content-type": "application/json",
+                "api-key": settings.BREVO_API_KEY,
+            },
+            method="POST",
+        )
+        with build_opener(_NoRedirect()).open(request, timeout=_TIMEOUT_SECONDS) as response:
+            if response.status != 201:
+                reason = _forbidden_reason(response) if response.status == 403 else _http_reason(response.status)
+                raise _CheckFailure(reason)
+            raw = response.read(_MAX_RESPONSE_BYTES + 1)
+            if len(raw) > _MAX_RESPONSE_BYTES:
+                raise _CheckFailure("response_too_large")
+    except _CheckFailure:
+        raise
+    except HTTPError as error:
+        reason = _forbidden_reason(error) if error.code == 403 else _http_reason(error.code)
+        try:
+            error.close()
+        except Exception:
+            pass
+        raise _CheckFailure(reason) from None
+    except URLError as error:
+        reason = "network_timeout" if isinstance(error.reason, TimeoutError) else "connection_failed"
+        raise _CheckFailure(reason) from None
+    except TimeoutError:
+        raise _CheckFailure("network_timeout") from None
+    except Exception:
+        raise _CheckFailure("connection_failed") from None
+    try:
+        response_payload = json.loads(raw)
+    except (ValueError, UnicodeError, RecursionError):
+        raise _CheckFailure("malformed_response") from None
+    if not isinstance(response_payload, dict):
+        raise _CheckFailure("malformed_response")
+    message_id = response_payload.get("messageId")
+    if (
+        not isinstance(message_id, str) or not message_id.strip() or len(message_id) > 1024
+        or any(ord(character) < 32 for character in message_id)
+    ):
+        raise _CheckFailure("malformed_response")
+
+
+def check_brevo_connection(*, sandbox=False):
+    """Run GET checks and, when requested, an independent non-delivering sandbox.
+
+    GET readiness always retains its original meaning. Sandbox results are
+    separate, and never establish delivery or sender verification.
+    """
+    result = _check_read_only_connection()
+    if sandbox:
+        result.update(sandbox_accepted=False, sandbox_reason="account_not_authenticated")
+        if result["account_authenticated"]:
+            try:
+                _sandbox_request()
+            except _CheckFailure as error:
+                result["sandbox_reason"] = str(error)
+            else:
+                result.update(sandbox_accepted=True, sandbox_reason="sandbox_accepted")
     return result

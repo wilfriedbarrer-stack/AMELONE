@@ -51,10 +51,14 @@ class BrevoConnectionTests(SimpleTestCase):
             "192.0.2.123", "2001:db8::123",
         ):
             self.assertNotIn(sensitive, rendered)
-        self.assertEqual(set(result), {
+        expected_keys = {
             "key_present", "account_authenticated", "sender_validated",
             "transactional_relay_enabled", "ready", "reason",
-        })
+        }
+        if "sandbox_accepted" in result:
+            expected_keys.update({"sandbox_accepted", "sandbox_reason"})
+            self.assertIsInstance(result["sandbox_accepted"], bool)
+        self.assertEqual(set(result), expected_keys)
         for field in ("key_present", "account_authenticated", "sender_validated", "ready"):
             self.assertIsInstance(result[field], bool)
         self.mail_mock.assert_not_called()
@@ -327,4 +331,152 @@ class BrevoConnectionTests(SimpleTestCase):
         call_command("check_brevo_connection", stdout=output)
         result = json.loads(output.getvalue().partition(" ")[2])
         self.assertTrue(result["ready"])
+        self.assert_safe(result)
+
+    def sandbox_responses(self, response, *, senders_forbidden=False):
+        get_senders = (
+            HTTPError("https://SECRET-REDIRECT", 403, "PRIVATE-ERROR", {}, io.BytesIO(b"PRIVATE-RAW-BODY"))
+            if senders_forbidden else self.response({"senders": [{"email": "sender@example.test", "active": True}]})
+        )
+        self.opener.open.side_effect = [self.response({"relay": {"enabled": True}}), get_senders, response]
+
+    def assert_one_safe_sandbox_post(self):
+        calls = self.opener.open.call_args_list
+        posts = [call for call in calls if call.args[0].get_method() == "POST"]
+        self.assertEqual(len(posts), 1)
+        request = posts[0].args[0]
+        self.assertEqual(request.full_url, "https://api.brevo.com/v3/smtp/email")
+        self.assertEqual(posts[0].kwargs, {"timeout": 10})
+        payload = json.loads(request.data)
+        self.assertEqual(set(payload), {"sender", "to", "headers", "subject", "textContent"})
+        self.assertEqual(payload["headers"], {"X-Sib-Sandbox": "drop"})
+        self.assertEqual(payload["sender"], {"email": "sender@example.test", "name": "AMELONE"})
+        self.assertEqual(payload["to"], [{"email": payload["sender"]["email"]}])
+        self.assertEqual(payload["subject"], "AMELONE - vérification technique sandbox")
+        self.assertEqual(payload["textContent"], "Vérification technique en mode sandbox, sans envoi.")
+        for call in self.opener_builder.call_args_list:
+            self.assertIsInstance(call.args[0], _NoRedirect)
+
+    def test_sandbox_is_explicit_and_uses_immutable_drop_to_sender_with_sending_disabled(self):
+        self.sandbox_responses(self.response({"messageId": "PRIVATE-RAW-BODY"}, status=201))
+        with (
+            patch("volunteers.notification_transports._brevo_request", side_effect=AssertionError("Real transport forbidden")),
+            patch("volunteers.notification_transports._require_ready", side_effect=AssertionError("Sending readiness forbidden")),
+        ):
+            result = check_brevo_connection(sandbox=True)
+        self.assertTrue(result["ready"])
+        self.assertTrue(result["sandbox_accepted"])
+        self.assertEqual(result["sandbox_reason"], "sandbox_accepted")
+        self.assertEqual(self.opener.open.call_count, 3)
+        self.assert_one_safe_sandbox_post()
+        self.assert_safe(result)
+
+    def test_sandbox_acceptance_does_not_override_forbidden_senders_get(self):
+        self.sandbox_responses(self.response({"messageId": "PRIVATE-RAW-BODY"}, status=201), senders_forbidden=True)
+        result = check_brevo_connection(sandbox=True)
+        self.assertFalse(result["ready"])
+        self.assertFalse(result["sender_validated"])
+        self.assertEqual(result["reason"], "access_denied")
+        self.assertTrue(result["sandbox_accepted"])
+        self.assertEqual(result["sandbox_reason"], "sandbox_accepted")
+        self.assert_one_safe_sandbox_post()
+        self.assert_safe(result)
+
+    def test_sandbox_never_posts_without_authenticated_account_and_local_configuration(self):
+        for configuration in (
+            {"BREVO_API_KEY": ""}, {"EMAIL_PROVIDER": "django"}, {"DEFAULT_FROM_EMAIL": "invalid"},
+        ):
+            with self.subTest(configuration=list(configuration)), override_settings(**configuration):
+                result = check_brevo_connection(sandbox=True)
+                self.assertFalse(result["sandbox_accepted"])
+                self.assertEqual(result["sandbox_reason"], "account_not_authenticated")
+                self.assert_safe(result)
+        self.opener.open.assert_not_called()
+        self.opener.open.side_effect = HTTPError("https://SECRET-REDIRECT", 401, "PRIVATE-ERROR", {}, io.BytesIO())
+        result = check_brevo_connection(sandbox=True)
+        self.assertFalse(result["sandbox_accepted"])
+        self.assertEqual(result["sandbox_reason"], "account_not_authenticated")
+        self.assertEqual(self.opener.open.call_count, 1)
+        self.assertEqual(self.opener.open.call_args.args[0].get_method(), "GET")
+        self.assert_safe(result)
+
+    def test_sandbox_rejects_malformed_or_oversized_success_responses(self):
+        malformed_values = (None, {}, [], "", "  ", 123, True, ["PRIVATE-RAW-BODY"], "id\nPRIVATE-RAW-BODY", "x" * 1025)
+        raw_responses = [json.dumps({"messageId": value}).encode() for value in malformed_values]
+        raw_responses.extend((b"PRIVATE-RAW-BODY", b"[]", b"\xff", b"[" * 2000 + b"]" * 2000, b"x" * 65537))
+        for raw in raw_responses:
+            with self.subTest(size=len(raw)):
+                self.opener.open.reset_mock()
+                context = self.response(None, raw=raw, status=201)
+                self.sandbox_responses(context)
+                result = check_brevo_connection(sandbox=True)
+                self.assertTrue(result["ready"])
+                self.assertFalse(result["sandbox_accepted"])
+                self.assertEqual(result["sandbox_reason"], "response_too_large" if len(raw) > 65536 else "malformed_response")
+                context.__enter__.return_value.read.assert_called_once_with(65537)
+                self.assert_one_safe_sandbox_post()
+                self.assert_safe(result)
+
+    def test_sandbox_http_errors_are_sanitized_and_never_retried(self):
+        for status, reason in (
+            (200, "unexpected_http_status"), (401, "invalid_api_key"), (403, "ip_not_authorized"),
+            (302, "redirect_refused"), (429, "provider_unavailable"), (503, "provider_unavailable"),
+        ):
+            with self.subTest(status=status):
+                self.opener.open.reset_mock()
+                body = io.BytesIO(b'{"message":"Unrecognised IP address 192.0.2.123 for private@example.test fake-brevo-key-not-a-secret"}')
+                error = HTTPError("https://SECRET-REDIRECT", status, "PRIVATE-ERROR", {}, body)
+                self.sandbox_responses(error)
+                result = check_brevo_connection(sandbox=True)
+                self.assertTrue(result["ready"])
+                self.assertFalse(result["sandbox_accepted"])
+                self.assertEqual(result["sandbox_reason"], reason)
+                self.assertTrue(body.closed)
+                self.assertEqual(self.opener.open.call_count, 3)
+                self.assert_one_safe_sandbox_post()
+                self.assert_safe(result)
+
+    def test_sandbox_timeouts_and_connection_errors_are_safe_and_never_retried(self):
+        for error, reason in (
+            (TimeoutError("PRIVATE-ERROR"), "network_timeout"),
+            (URLError(TimeoutError("PRIVATE-ERROR")), "network_timeout"),
+            (URLError(ConnectionRefusedError("PRIVATE-ERROR")), "connection_failed"),
+            (ValueError("PRIVATE-ERROR"), "connection_failed"),
+        ):
+            with self.subTest(reason=reason):
+                self.opener.open.reset_mock()
+                self.sandbox_responses(error)
+                result = check_brevo_connection(sandbox=True)
+                self.assertFalse(result["sandbox_accepted"])
+                self.assertEqual(result["sandbox_reason"], reason)
+                self.assert_one_safe_sandbox_post()
+                self.assert_safe(result)
+
+    def test_command_sandbox_option_outputs_one_safe_line(self):
+        self.sandbox_responses(self.response({"messageId": "PRIVATE-RAW-BODY"}, status=201), senders_forbidden=True)
+        output = io.StringIO()
+        call_command("check_brevo_connection", sandbox=True, no_fail=True, stdout=output)
+        lines = output.getvalue().splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].startswith("BREVO_CONNECTION_CHECK "))
+        result = json.loads(lines[0].partition(" ")[2])
+        self.assertFalse(result["ready"])
+        self.assertTrue(result["sandbox_accepted"])
+        self.assert_one_safe_sandbox_post()
+        self.assert_safe(result)
+
+    def test_command_sandbox_rejects_extra_recipient_or_header_parameters(self):
+        for option in ("recipient", "headers", "drop"):
+            with self.subTest(option=option), self.assertRaises(TypeError):
+                call_command("check_brevo_connection", sandbox=True, **{option: "PRIVATE-RAW-BODY"})
+        self.opener.open.assert_not_called()
+
+    def test_command_failed_sandbox_exits_nonzero_even_if_get_ready(self):
+        self.sandbox_responses(self.response({}, status=201))
+        output = io.StringIO()
+        with self.assertRaisesMessage(CommandError, "BREVO_CONNECTION_CHECK_NOT_READY"):
+            call_command("check_brevo_connection", sandbox=True, stdout=output)
+        result = json.loads(output.getvalue().partition(" ")[2])
+        self.assertTrue(result["ready"])
+        self.assertFalse(result["sandbox_accepted"])
         self.assert_safe(result)

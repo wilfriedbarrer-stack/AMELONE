@@ -18,13 +18,15 @@ class BrevoRuntimeCheckTests(SimpleTestCase):
         self.server = SimpleNamespace(log=Mock())
 
     def test_default_start_never_calls_brevo(self):
-        with patch.dict("os.environ", {"BREVO_VERIFY_ON_START": "0"}), patch.object(self.config.subprocess, "run") as run:
+        with patch.dict("os.environ", {"BREVO_VERIFY_ON_START": "0", "BREVO_VERIFY_SANDBOX_ON_START": "0"}), patch.object(
+            self.config.subprocess, "run",
+        ) as run:
             self.config.when_ready(self.server)
         run.assert_not_called()
         self.server.log.warning.assert_not_called()
 
     def test_requested_check_runs_once_with_fixed_command_and_no_secret_arguments(self):
-        with patch.dict("os.environ", {"BREVO_VERIFY_ON_START": "1"}), patch.object(
+        with patch.dict("os.environ", {"BREVO_VERIFY_ON_START": "1", "BREVO_VERIFY_SANDBOX_ON_START": "0"}), patch.object(
             self.config.subprocess, "run", return_value=SimpleNamespace(returncode=0),
         ) as run:
             self.config.when_ready(self.server)
@@ -32,6 +34,18 @@ class BrevoRuntimeCheckTests(SimpleTestCase):
             [sys.executable, str(self.path.parent / "manage.py"), "check_brevo_connection", "--no-fail"],
             cwd=self.path.parent, timeout=25, check=False,
         )
+        self.server.log.warning.assert_not_called()
+
+    def test_sandbox_check_uses_one_command_even_when_both_checks_are_requested(self):
+        for regular in ("0", "1"):
+            with self.subTest(regular=regular), patch.dict(
+                "os.environ", {"BREVO_VERIFY_ON_START": regular, "BREVO_VERIFY_SANDBOX_ON_START": "1"},
+            ), patch.object(self.config.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as run:
+                self.config.when_ready(self.server)
+            run.assert_called_once_with(
+                [sys.executable, str(self.path.parent / "manage.py"), "check_brevo_connection", "--no-fail", "--sandbox"],
+                cwd=self.path.parent, timeout=40, check=False,
+            )
         self.server.log.warning.assert_not_called()
 
     def test_check_timeout_and_execution_errors_leave_web_server_available_without_error_details(self):
