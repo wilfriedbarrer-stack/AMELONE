@@ -9,11 +9,20 @@ n'est envoyé.
 
 Dans un événement, ouvrir **Autres actions → Annonces et rappels · WhatsApp et
 emails**. Les messages « nouvel événement » et « postes à pourvoir » sont prêts à
-partager. **Ouvrir WhatsApp** ouvre un lien générique `wa.me/?text=…` : choisir le
-groupe bénévoles et confirmer l'envoi dans WhatsApp. Le bouton **Copier le
-message** utilise le presse-papiers du navigateur ; si l'accès est refusé, le
-texte est sélectionné pour une copie manuelle. Sans JavaScript, le lien et la
-zone de texte restent utilisables.
+partager. **Partager le message**, lorsqu'il est disponible, transmet directement
+le texte Unicode au menu de partage de l'appareil : choisir WhatsApp, le groupe
+bénévoles, puis confirmer l'envoi. Le bouton passe uniquement le texte, sans
+conversion en URL ; une annulation n'ouvre aucun lien et ne déclenche aucune
+copie. La disponibilité de WhatsApp dans ce menu dépend de l'appareil.
+
+**Copier le message** conserve aussi les emojis et les retours à la ligne. Il
+utilise le presse-papiers du navigateur ; si l'accès est refusé, le texte est
+sélectionné pour une copie manuelle. Cette action devient le bouton principal
+si le partage de l'appareil est indisponible. **Ouvrir WhatsApp** conserve le
+lien générique `wa.me/?text=…` : si des emojis disparaissent à cette ouverture,
+coller le message copié dans WhatsApp. Sans JavaScript, le lien et la zone de
+texte restent utilisables. Le site ne peut pas vérifier le texte reçu par
+l'application ni confirmer son envoi.
 
 Seuls les détails de l'événement et les postes disponibles sont inclus, sans
 coordonnées ni noms de participants. Le groupe entier reçoit le message : le
@@ -28,7 +37,8 @@ places libres. Il fonctionne indépendamment des réglages email. Aucun envoi
 automatique WhatsApp à 48 h, appel à une API Meta, numéro de groupe stocké ou
 statut « envoyé » n'est créé lors d'un clic. Aucun abonnement professionnel ni
 achat de crédits WhatsApp/SMS n'est nécessaire à cette fonction.
-Source : [partage WhatsApp avec texte préparé](https://faq.whatsapp.com/5913398998672934).
+Sources : [partage WhatsApp avec texte préparé](https://faq.whatsapp.com/5913398998672934),
+[partage de texte Unicode par le navigateur](https://www.w3.org/TR/web-share/#sharedata-dictionary).
 
 ## Configuration SMTP alternative
 
