@@ -14,7 +14,7 @@
 .notification-email { margin-top: 1rem; }
 .notification-email .detail-grid { margin-bottom: 1.25rem; }
 </style>
-<script src="{% static 'js/whatsapp-sharing.js' %}?v=1" defer></script>
+<script src="{% static 'js/whatsapp-sharing.js' %}?v=2" defer></script>
 {% endblock %}
 {% block content %}
 <header class="page-header">
@@ -40,7 +40,7 @@
       <article>
         <h3>WhatsApp manuel</h3>
         <p><span class="badge badge-success">Sans configuration</span></p>
-        <p>Ouvrez le message, choisissez votre groupe de bénévoles dans WhatsApp, puis confirmez l’envoi. Tout le groupe pourra le lire.</p>
+        <p>Partagez le message ou copiez-le dans votre groupe de bénévoles, puis confirmez l’envoi dans WhatsApp. Tout le groupe pourra le lire.</p>
         <p class="help-text">Aucun envoi automatique ni confirmation d’envoi sur le site.</p>
       </article>
       {% for channel in channels %}
@@ -61,14 +61,15 @@
       <div class="field">
         <label for="whatsapp-{{ card.kind }}">Message prêt à partager</label>
         <textarea id="whatsapp-{{ card.kind }}" readonly rows="12" aria-describedby="whatsapp-help-{{ card.kind }}">{{ card.whatsapp.body_text }}</textarea>
-        <p id="whatsapp-help-{{ card.kind }}" class="help-text">Vous pouvez sélectionner et copier ce texte, puis le coller dans votre groupe WhatsApp.</p>
+        <p id="whatsapp-help-{{ card.kind }}" class="help-text">Pour conserver les emojis, utilisez le partage de votre appareil ou copiez puis collez ce texte dans WhatsApp.</p>
       </div>
       {% if card.whatsapp.can_share %}
       <div class="button-row">
-        <a class="button button-primary" href="{{ card.whatsapp.share_url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Ouvrir WhatsApp <span class="sr-only">et choisir le groupe, dans une nouvelle fenêtre</span></a>
+        <button class="button button-primary" type="button" data-whatsapp-share="whatsapp-{{ card.kind }}" data-whatsapp-feedback="whatsapp-feedback-{{ card.kind }}" hidden>Partager le message</button>
         <button class="button button-secondary" type="button" data-whatsapp-copy="whatsapp-{{ card.kind }}" data-whatsapp-feedback="whatsapp-feedback-{{ card.kind }}" hidden>Copier le message</button>
+        <a class="button button-secondary" href="{{ card.whatsapp.share_url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Ouvrir WhatsApp <span class="sr-only">et choisir le groupe, dans une nouvelle fenêtre</span></a>
       </div>
-      <p class="help-text">Dans WhatsApp, choisissez le groupe des bénévoles et vérifiez le message avant de l’envoyer.</p>
+      <p class="help-text">Dans le menu de partage, choisissez WhatsApp puis votre groupe. Si les emojis disparaissent avec « Ouvrir WhatsApp », collez le message copié. Vérifiez le texte avant l’envoi.</p>
       <p id="whatsapp-feedback-{{ card.kind }}" class="help-text" role="status" aria-live="polite"></p>
       {% endif %}
     </div>
