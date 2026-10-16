@@ -1,7 +1,40 @@
 # Configuration des emails
 
-L'envoi est désactivé par défaut. Tant que `EMAIL_ENABLED=1` et les paramètres SMTP ne
-sont pas présents, l'interface affiche la limite et aucun message n'est marqué envoyé.
+Le choix retenu pour AMELONE est **Brevo pour les emails automatiques et WhatsApp
+manuel dans le groupe bénévoles**. L'envoi email reste désactivé tant que le
+compte Brevo, la clé API et l'adresse expéditrice ne sont pas prêts. Aucun SMS
+n'est envoyé.
+
+## Partage manuel WhatsApp
+
+Dans un événement, ouvrir **Autres actions → Annonces et rappels · WhatsApp et
+emails**. Les messages « nouvel événement » et « postes à pourvoir » sont prêts à
+partager. **Ouvrir WhatsApp** ouvre un lien générique `wa.me/?text=…` : choisir le
+groupe bénévoles et confirmer l'envoi dans WhatsApp. Le bouton **Copier le
+message** utilise le presse-papiers du navigateur ; si l'accès est refusé, le
+texte est sélectionné pour une copie manuelle. Sans JavaScript, le lien et la
+zone de texte restent utilisables.
+
+Seuls les détails de l'événement et les postes disponibles sont inclus, sans
+coordonnées ni noms de participants. Le groupe entier reçoit le message : le
+rappel s'adresse donc explicitement aux personnes pas encore inscrites, sans
+prétendre filtrer le groupe. La liste est limitée à huit créneaux et quatre
+dates, avec un lien vers le détail complet. Les places peuvent changer après la
+préparation du message.
+
+Le partage demande un événement publié, avec une journée présente ou future et
+une clôture à venir. Le rappel exige aussi des inscriptions ouvertes et des
+places libres. Il fonctionne indépendamment des réglages email. Aucun envoi
+automatique WhatsApp à 48 h, appel à une API Meta, numéro de groupe stocké ou
+statut « envoyé » n'est créé lors d'un clic. Aucun abonnement professionnel ni
+achat de crédits WhatsApp/SMS n'est nécessaire à cette fonction.
+Source : [partage WhatsApp avec texte préparé](https://faq.whatsapp.com/5913398998672934).
+
+## Configuration SMTP alternative
+
+Cette alternative concerne un autre hébergement ou une offre autorisant SMTP.
+Pour le service Render Free actuel, utiliser la configuration Brevo HTTPS
+ci-dessous.
 
 Variables nécessaires :
 
@@ -37,32 +70,25 @@ Source : [limitations des services gratuits Render](https://render.com/docs/free
 
 ### Offre et prérequis du prestataire
 
-Pour démarrer avec un seul compte email et SMS, Brevo est le choix proposé.
+Brevo est retenu pour les emails ; WhatsApp reste un partage manuel.
 Son offre gratuite permet 300 emails par jour, sans limite de durée ; le quota
-inutilisé n’est pas reporté au lendemain. Les SMS sont payants et s’achètent
-séparément : consulter le calculateur France dans le compte avant tout achat.
-Le nombre de crédits consommés dépend notamment de la destination et de la
-longueur du message.
-Sources : [offre gratuite Brevo](https://help.brevo.com/hc/fr/articles/208580669-FAQ-Quels-sont-les-limites-de-l-offre-Gratuit),
-[crédits et tarifs SMS](https://help.brevo.com/hc/fr/articles/208717449-Tarification-des-SMS-et-pays-pris-en-charge).
+inutilisé n’est pas reporté au lendemain. Aucun crédit SMS n'est à acheter pour
+la configuration retenue.
+Source : [offre gratuite Brevo](https://help.brevo.com/hc/fr/articles/208580669-FAQ-Quels-sont-les-limites-de-l-offre-Gratuit).
 
-Avant d’activer les canaux :
+Avant d’activer les emails :
 
 1. Créer le compte Brevo de l’association, puis configurer et faire valider
    l’expéditeur email, avec l’authentification de domaine demandée par Brevo.
 2. Créer une clé API privée. Elle reste dans les variables du serveur, jamais
    dans le dépôt, les pages publiques ou les journaux.
-3. Pour les SMS, faire enregistrer et approuver l’identifiant d’expéditeur pour
-   la France, par exemple `AMELONE`, puis disposer de crédits suffisants.
-   L’enregistrement est également nécessaire pour les SMS transactionnels.
-4. Vérifier le fonctionnement sur les coordonnées du responsable avant
+3. Vérifier le fonctionnement sur les coordonnées du responsable avant
    d’autoriser les campagnes vers les familles.
 
-Sources : [expéditeurs et domaines Brevo](https://developers.brevo.com/docs/getting-started-with-senders-and-domains),
-[enregistrer un expéditeur SMS](https://help.brevo.com/hc/fr/articles/28255350696466-Enregistrer-un-ID-d-exp%C3%A9diteur-pour-envoyer-des-SMS).
+Source : [expéditeurs et domaines Brevo](https://developers.brevo.com/docs/getting-started-with-senders-and-domains).
 
 La préparation du code ou la présence d’une clé ne crée pas un compte prestataire,
-ne vérifie pas le solde de crédits et ne prouve pas l’approbation de l’expéditeur.
+ne prouve pas l’approbation de l’expéditeur.
 
 ### Variables de l’application
 
@@ -71,32 +97,32 @@ désactivés tant que le compte et ses expéditeurs ne sont pas prêts :
 
 ```dotenv
 EMAIL_PROVIDER=brevo
+EMAIL_BACKEND=
 EMAIL_ENABLED=0
 BREVO_API_KEY=cle-privee-a-renseigner-sur-le-serveur
 DEFAULT_FROM_EMAIL=AMELONE <adresse-expeditrice-validee@example.org>
 SITE_URL=https://amelone.onrender.com
-SMS_PROVIDER=brevo
 SMS_ENABLED=0
-SMS_SENDER=AMELONE
 EVENT_NOTIFICATIONS_ENABLED=0
 ```
 
-`EMAIL_ENABLED=1` autorise le canal email ; `SMS_ENABLED=1` autorise le canal SMS.
+`EMAIL_ENABLED=1` autorise le canal email. Laisser `SMS_ENABLED=0` : le groupe
+bénévoles reçoit les messages via le partage manuel WhatsApp. Le formulaire
+d'événement ne propose plus d'option SMS et désactive cet ancien réglage lors
+de l'enregistrement. Les anciens historiques SMS sont conservés.
+`EMAIL_BACKEND` vide laisse Django sélectionner automatiquement le backend
+Brevo HTTPS ; un ancien backend SMTP explicite doit être retiré.
 Le commutateur `EVENT_NOTIFICATIONS_ENABLED=1` autorise le traitement des campagnes
 d’événements, sous réserve de leur activation et de leur échéance. Conserver ce
-commutateur à `0` pendant la préparation. Un canal peut rester désactivé même si
-l’autre est prêt. `SMS_SENDER` comporte de 3 à 11 lettres ou chiffres et au moins
-une lettre ; il doit correspondre à l’expéditeur approuvé par Brevo.
+commutateur à `0` pendant la préparation. Les trois réglages d'événement
+concernent uniquement les emails : annonce, rappel et autorisation email.
 
-Les appels du transport utilisent les endpoints HTTPS
-`https://api.brevo.com/v3/smtp/email` et
-`https://api.brevo.com/v3/transactionalSMS/send`.
+Les emails utilisent l'endpoint HTTPS `https://api.brevo.com/v3/smtp/email`.
 La clé API est envoyée uniquement dans l’en-tête d’authentification du serveur.
 Une acceptation par le prestataire ne prouve pas la livraison ni la lecture.
 Les tentatives et résultats sont conservés ; un résultat incertain demande une
 vérification avant une éventuelle nouvelle tentative.
-Sources : [API email Brevo](https://developers.brevo.com/reference/send-transac-email),
-[API SMS transactionnels](https://developers.brevo.com/docs/transactional-sms-endpoints).
+Source : [API email Brevo](https://developers.brevo.com/reference/send-transac-email).
 
 ### Automatisation retenue : GitHub Actions toutes les 15 minutes
 
@@ -120,6 +146,13 @@ identifiants du dépôt et de son propriétaire, branche `main`, chemin exact du
 workflow et déclenchement `schedule` ou `workflow_dispatch`. Un jeton pour un
 autre dépôt, une autre branche ou un autre workflow ne doit pas autoriser un
 traitement.
+
+AMELONE ayant été créé après le 15 juillet 2026, le sujet OIDC attendu contient
+les identifiants immuables du propriétaire et du dépôt :
+`repo:wilfriedbarrer-stack@342539682/AMELONE@1419056471:ref:refs/heads/main`.
+L'ancien format sans identifiants est refusé. Les diagnostics internes indiquent
+seulement la catégorie d'erreur ou le nom du champ rejeté, sans jeton ni valeur.
+Source : [sujets immuables GitHub OIDC](https://docs.github.com/en/actions/reference/security/oidc#immutable-subject-claims).
 
 Les identités attendues sont fixées dans
 [les paramètres Django](../amelone/settings.py), sous le préfixe
@@ -174,9 +207,9 @@ Sources : [facturation GitHub Actions](https://docs.github.com/en/billing/concep
 [limitations Render Free](https://render.com/docs/free).
 
 L’intervention nécessaire côté association reste la préparation du compte Brevo,
-la validation des expéditeurs et l’achat de crédits si les SMS sont souhaités.
+la validation de l'adresse expéditrice et la saisie de la clé API sur Render.
 Renseigner la clé et l’adresse expéditrice dans Render, hors du chat et du dépôt,
-puis autoriser séparément les canaux prêts. La configuration OIDC ne nécessite
+puis activer les emails lorsqu'ils sont prêts. La configuration OIDC ne nécessite
 pas de recopier une clé GitHub dans Render ni de transmettre la clé Brevo à
 GitHub Actions.
 
