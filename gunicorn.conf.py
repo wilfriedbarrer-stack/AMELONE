@@ -7,13 +7,16 @@ from pathlib import Path
 
 
 def when_ready(server):
-    if os.environ.get("BREVO_VERIFY_ON_START", "0") != "1":
+    sandbox = os.environ.get("BREVO_VERIFY_SANDBOX_ON_START", "0") == "1"
+    if os.environ.get("BREVO_VERIFY_ON_START", "0") != "1" and not sandbox:
         return
     root = Path(__file__).resolve().parent
+    command = [sys.executable, str(root / "manage.py"), "check_brevo_connection", "--no-fail"]
+    if sandbox:
+        command.append("--sandbox")
     try:
         result = subprocess.run(
-            [sys.executable, str(root / "manage.py"), "check_brevo_connection", "--no-fail"],
-            cwd=root, timeout=25, check=False,
+            command, cwd=root, timeout=40 if sandbox else 25, check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
         server.log.warning("BREVO_CONNECTION_CHECK runtime_probe_unavailable")
