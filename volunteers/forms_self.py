@@ -1,8 +1,9 @@
 """Profil personnel et participation des administrateurs et officiels."""
 
 from django import forms
-from django.db.models import Count, Q
+from django.db.models import Q
 
+from .capacity import get_slot_capacities
 from .forms_eligibility import eligible_slots, station_requirements_label
 from .forms_family import FamilyRegistrationForm, MemberForm, configure_official_meal_pricing
 from .models import Assignment, MealOrder, Member, StationSlot
@@ -49,8 +50,12 @@ class PersonalProfileForm(forms.Form):
 
 
 class PersonalSlotChoiceField(forms.ModelMultipleChoiceField):
+    def __init__(self, *args, capacities, **kwargs):
+        self.capacities = capacities
+        super().__init__(*args, **kwargs)
+
     def label_from_instance(self, slot):
-        remaining = max(0, slot.capacity - slot.assignment_count)
+        remaining = self.capacities[slot.pk].remaining
         hours = f"{slot.start_time:%H:%M}–{slot.end_time:%H:%M}" if slot.start_time and slot.end_time else "Horaires à préciser"
         inactive = " (poste inactif, affectation existante)" if not slot.station.is_active else ""
         requirements = station_requirements_label(slot.station)
@@ -74,14 +79,18 @@ class PersonalRegistrationForm(FamilyRegistrationForm):
                 Q(station__is_active=True) | Q(pk__in=current_slot_ids),
             ).select_related("station", "event_day")
             eligible_ids = list(eligible_slots(available_slots, member, event_day).values_list("pk", flat=True))
+            candidate_slots = list(available_slots.filter(
+                Q(pk__in=eligible_ids) | Q(pk__in=current_slot_ids),
+            ))
+            capacities = get_slot_capacities(candidate_slots)
+            available_ids = [
+                slot.pk for slot in candidate_slots
+                if capacities[slot.pk].remaining > 0 or slot.pk in current_slot_ids
+            ]
             self.fields["station_slots"] = PersonalSlotChoiceField(
                 label="Mes postes et périodes", required=False,
-                queryset=available_slots.filter(Q(pk__in=eligible_ids) | Q(pk__in=current_slot_ids))
-                .select_related("station")
-                .annotate(assignment_count=Count("assignments", filter=Q(
-                    assignments__status__in=[Assignment.Status.DRAFT, Assignment.Status.CONFIRMED],
-                    assignments__registration__status="active",
-                )))
+                capacities=capacities,
+                queryset=available_slots.filter(pk__in=available_ids)
                 .order_by("station__position", "station__name", "start_time"),
                 widget=forms.CheckboxSelectMultiple,
                 help_text="Cochez vos postes pour confirmer vos affectations et décochez-les pour les retirer. Un poste d’officiel nécessite une habilitation attribuée à votre profil personnel par un administrateur. Licence et formation à jour nécessaires.",

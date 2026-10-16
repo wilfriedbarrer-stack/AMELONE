@@ -11,12 +11,14 @@ from django.test import TestCase, TransactionTestCase, override_settings, skipUn
 from django.utils import timezone
 
 from volunteers.event_notifications import (
+    _vacancies,
     notification_preview,
     process_event_notifications,
     record_event_publication,
     retry_event_notification_failures,
 )
 from volunteers.models import (
+    Assignment,
     Event,
     EventDay,
     EventNotificationCampaign,
@@ -69,6 +71,13 @@ class EventNotificationTests(DataMixin, TestCase):
     def deliveries(self, kind="publication"):
         return EventNotificationDelivery.objects.filter(campaign__event=self.event, campaign__kind=kind)
 
+    def shared_full_slot(self):
+        StationSlot.objects.filter(pk__in=(self.morning_slot.pk, self.afternoon_slot.pk)).update(capacity=2)
+        return StationSlot.objects.create(
+            station=self.station, event_day=self.day,
+            period=StationSlot.Period.FULL_DAY, capacity=2,
+        )
+
     def test_publication_hook_records_once_without_sending_and_does_not_repeat_on_republication(self):
         self.assertEqual(EventNotificationCampaign.objects.filter(event=self.event).count(), 1)
         self.assertFalse(EventNotificationDelivery.objects.exists())
@@ -119,7 +128,9 @@ class EventNotificationTests(DataMixin, TestCase):
         before = list(EventNotificationCampaign.objects.values())
         preview = notification_preview(self.event, "vacancy_reminder", now=self.now)
         self.assertEqual(preview["recipient_count"], 2)
-        self.assertEqual(sum(item["remaining"] for item in preview["vacancies"]), 3)
+        self.assertEqual({item["slot_id"]: item["remaining"] for item in preview["vacancies"]}, {
+            self.morning_slot.pk: 1, self.afternoon_slot.pk: 2,
+        })
         self.assertIn("heure de Paris", preview["body_text"])
         self.assertIn("dimanche 28 février 2027", preview["body_text"])
         result = process_event_notifications(now=self.now, dry_run=True)
@@ -234,6 +245,82 @@ class EventNotificationTests(DataMixin, TestCase):
         self.assertFalse(self.deliveries("vacancy_reminder").exists())
         self.email.assert_not_called()
 
+    def test_full_day_draft_limits_half_day_vacancies_and_preview_is_read_only(self):
+        full_slot = self.shared_full_slot()
+        create_assignment(registration=self.registration(), station_slot=full_slot, actor=self.organizer)
+        before = [list(model.objects.values()) for model in (
+            Assignment, Registration, EventNotificationCampaign, EventNotificationDelivery,
+        )]
+        with self.assertNumQueries(2):
+            vacancies = _vacancies(self.event, self.now)
+        self.assertEqual({item["slot_id"]: item["remaining"] for item in vacancies}, {
+            full_slot.pk: 1, self.morning_slot.pk: 1, self.afternoon_slot.pk: 1,
+        })
+        preview = notification_preview(self.event, "vacancy_reminder", now=self.now)
+        self.assertEqual(preview["recipient_count"], 1)
+        self.assertTrue(preview["has_shared_places"])
+        self.assertIn("les disponibilités ne s’additionnent pas", preview["body_text"])
+        self.assertEqual(before, [list(model.objects.values()) for model in (
+            Assignment, Registration, EventNotificationCampaign, EventNotificationDelivery,
+        )])
+        self.email.assert_not_called()
+        self.sms.assert_not_called()
+
+    def test_full_day_and_morning_leave_only_afternoon_then_all_shared_places_are_filled(self):
+        self.reminder_due()
+        full_slot = self.shared_full_slot()
+        create_assignment(registration=self.registration(), station_slot=full_slot, actor=self.organizer)
+        half_registration = self.registration(member=self.other_member)
+        morning = create_assignment(
+            registration=half_registration, station_slot=self.morning_slot, actor=self.organizer,
+        )
+        morning.status = Assignment.Status.CONFIRMED
+        morning.save(update_fields=("status",))
+        preview = notification_preview(self.event, "vacancy_reminder", now=self.now)
+        self.assertEqual([(item["slot_id"], item["remaining"]) for item in preview["vacancies"]], [
+            (self.afternoon_slot.pk, 1),
+        ])
+        create_assignment(
+            registration=half_registration, station_slot=self.afternoon_slot, actor=self.organizer,
+        )
+        self.assertFalse(notification_preview(self.event, "vacancy_reminder", now=self.now)["vacancies"])
+        process_event_notifications(now=self.now)
+        self.assertIn("pourvus", self.campaign("vacancy_reminder").skipped_reason)
+        self.assertFalse(self.deliveries("vacancy_reminder").exists())
+        self.email.assert_not_called()
+        self.sms.assert_not_called()
+
+    def test_shared_vacancy_reminder_reaches_only_families_without_active_registration(self):
+        self.reminder_due()
+        full_slot = self.shared_full_slot()
+        create_assignment(registration=self.registration(), station_slot=full_slot, actor=self.organizer)
+        stats = process_event_notifications(now=self.now)
+        self.assertEqual(stats["accepted"], 1)
+        self.assertEqual(set(self.deliveries("vacancy_reminder").values_list("family_id", flat=True)), {
+            self.other_family.pk,
+        })
+        self.email.assert_called_once()
+        self.assertEqual(self.email.call_args.kwargs["to"], self.other_user.email)
+        self.assertIn("les disponibilités ne s’additionnent pas", self.email.call_args.kwargs["body"])
+        self.assertEqual(self.email.call_args.kwargs["body"].count("1 place(s)."), 3)
+        self.sms.assert_not_called()
+
+    def test_cancelled_full_day_assignment_or_registration_does_not_occupy_shared_places(self):
+        full_slot = self.shared_full_slot()
+        registration = self.registration()
+        assignment = create_assignment(
+            registration=registration, station_slot=full_slot, actor=self.organizer,
+        )
+        remove_assignment(assignment=assignment, actor=self.organizer)
+        cancelled_assignment = notification_preview(self.event, "vacancy_reminder", now=self.now)
+        self.assertEqual({item["slot_id"]: item["remaining"] for item in cancelled_assignment["vacancies"]}, {
+            full_slot.pk: 2, self.morning_slot.pk: 2, self.afternoon_slot.pk: 2,
+        })
+        Assignment.objects.filter(pk=assignment.pk).update(status=Assignment.Status.DRAFT)
+        Registration.objects.filter(pk=registration.pk).update(status=Registration.Status.CANCELLED)
+        cancelled_registration = notification_preview(self.event, "vacancy_reminder", now=self.now)
+        self.assertEqual(cancelled_registration["vacancies"], cancelled_assignment["vacancies"])
+
     def test_cancelled_assignment_and_inactive_station_do_not_create_false_occupancy_or_vacancies(self):
         self.reminder_due()
         assignment = create_assignment(
@@ -247,7 +334,9 @@ class EventNotificationTests(DataMixin, TestCase):
         self.station.is_active = True
         self.station.save(update_fields=("is_active",))
         preview = notification_preview(self.event, "vacancy_reminder", now=self.now)
-        self.assertEqual(sum(item["remaining"] for item in preview["vacancies"]), 3)
+        self.assertEqual({item["slot_id"]: item["remaining"] for item in preview["vacancies"]}, {
+            self.morning_slot.pk: 1, self.afternoon_slot.pk: 2,
+        })
 
     def test_account_deactivation_or_contact_change_after_preparation_prevents_delivery(self):
         self.readiness.return_value = {"ready": False, "reason": "À configurer"}

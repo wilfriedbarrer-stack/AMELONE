@@ -6,7 +6,14 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .event_notifications import PARIS, PUBLICATION, VACANCY_REMINDER, _french_date, _vacancies
+from .event_notifications import (
+    PARIS,
+    PUBLICATION,
+    SHARED_PLACES_NOTE,
+    VACANCY_REMINDER,
+    _french_date,
+    _vacancies,
+)
 from .models import Event
 
 MAX_SHARED_SLOTS = 8
@@ -72,6 +79,8 @@ def whatsapp_preview(event, kind, *, now=None, vacancies=None, event_url=None):
 
     if kind == VACANCY_REMINDER and vacancies:
         lines.extend(["", "Places disponibles au moment de préparer ce message :"])
+        if any(item.get("shared_places") for item in vacancies[:MAX_SHARED_SLOTS]):
+            lines.append(SHARED_PLACES_NOTE)
         for vacancy in vacancies[:MAX_SHARED_SLOTS]:
             hours = (
                 f" · {vacancy['start_time']:%H:%M}–{vacancy['end_time']:%H:%M}"

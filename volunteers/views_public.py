@@ -14,6 +14,7 @@ from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_safe
 
+from .capacity import get_slot_capacities
 from .models import (
     Assignment,
     Event,
@@ -151,12 +152,15 @@ def public_planning(request, event_id=None, day_id=None):
                 assignments__registration__status=Registration.Status.ACTIVE,
                 assignments__registration__member__family_id=family_id,
             ).distinct() if family_id else slots.none()
+        slots = list(slots)
+        capacities = get_slot_capacities(slots, statuses=(Assignment.Status.CONFIRMED,))
         for slot in slots:
             names = sorted(
                 assignment.registration.member.full_name
                 for assignment in slot.confirmed_assignments
             )
-            taken = len(names)
+            capacity = capacities[slot.pk]
+            taken = capacity.occupied
             if slot.start_time and slot.end_time:
                 schedule = f"{slot.start_time:%H:%M}–{slot.end_time:%H:%M}"
             else:
@@ -178,12 +182,13 @@ def public_planning(request, event_id=None, day_id=None):
                     "time_label": schedule,
                     "names": names,
                     "people": names,
-                    "capacity": slot.capacity,
+                    "capacity": capacity.capacity,
                     "taken": taken,
-                    "remaining": max(slot.capacity - taken, 0),
-                    "is_full": taken >= slot.capacity,
-                    "fill_percent": min(round(taken * 100 / slot.capacity), 100)
-                    if slot.capacity
+                    "remaining": capacity.remaining,
+                    "blocked_elsewhere": max(capacity.capacity - taken - capacity.remaining, 0),
+                    "is_full": capacity.remaining == 0,
+                    "fill_percent": min(round((capacity.capacity - capacity.remaining) * 100 / capacity.capacity), 100)
+                    if capacity.capacity
                     else 100,
                 }
             )

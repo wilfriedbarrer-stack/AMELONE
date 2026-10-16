@@ -77,6 +77,7 @@
     <details class="participation-section">
       <summary>Voir tous les créneaux à pourvoir</summary>
       {% if card.preview.vacancies %}
+      {% if card.preview.has_shared_places %}<p class="help-text">{{ card.preview.shared_places_note }}</p>{% endif %}
       <div class="responsive-table"><table>
         <thead><tr><th>Poste</th><th>Date</th><th>Période</th><th>Horaires</th><th>Places libres</th></tr></thead>
         <tbody>{% for vacancy in card.preview.vacancies %}<tr>
@@ -96,7 +97,7 @@
       <p>{{ card.description }}</p>
       <dl class="detail-grid">
         <div><dt>Familles concernées par l’e-mail</dt><dd>{{ card.preview.recipient_count }}</dd></div>
-        <div><dt>Places encore libres</dt><dd>{{ card.remaining_places }} sur {{ card.preview.vacancies|length }} créneau{{ card.preview.vacancies|length|pluralize }}</dd></div>
+        <div><dt>Créneaux avec des places</dt><dd>{{ card.vacant_slot_count }}</dd></div>
         <div><dt>Déclenchement de l’e-mail</dt><dd>{% if card.scheduled_for %}{{ card.scheduled_for|date:"d/m/Y à H:i" }}{% else %}À la première publication{% endif %}</dd></div>
         {% if card.campaign.prepared_at %}<div><dt>Campagne préparée</dt><dd>{{ card.campaign.prepared_at|date:"d/m/Y à H:i" }}</dd></div>{% endif %}
       </dl>

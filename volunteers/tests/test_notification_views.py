@@ -7,11 +7,13 @@ from django.urls import reverse
 from django.utils import timezone
 
 from volunteers.models import (
+    Assignment,
     Event,
     EventNotificationCampaign,
     EventNotificationDelivery,
     Family,
     Registration,
+    StationSlot,
     User,
 )
 
@@ -60,7 +62,7 @@ class EventNotificationViewTests(DataMixin, TestCase):
         cards = {card["kind"]: card for card in response.context["cards"]}
         self.assertEqual(cards["publication"]["preview"]["recipient_count"], 2)
         self.assertEqual(cards["vacancy_reminder"]["preview"]["recipient_count"], 1)
-        self.assertEqual(cards["vacancy_reminder"]["remaining_places"], 3)
+        self.assertEqual(cards["vacancy_reminder"]["vacant_slot_count"], 2)
         self.assertEqual(cards["vacancy_reminder"]["scheduled_for"], self.event.registration_closes_at - timedelta(hours=48))
         self.assertContains(response, "48 heures avant la clôture")
         self.assertContains(response, "Les e-mails automatiques sont désactivés.")
@@ -68,6 +70,25 @@ class EventNotificationViewTests(DataMixin, TestCase):
         self.assertContains(response, "https://amelone.onrender.com" + reverse("family_event_detail", args=[self.event.pk]))
         self.assertNotContains(response, "Réessayer les échecs")
         self.assertIn("no-store", response.headers["Cache-Control"])
+
+    def test_shared_alternatives_show_vacant_slot_count_without_adding_places(self):
+        StationSlot.objects.filter(pk__in=(self.morning_slot.pk, self.afternoon_slot.pk)).update(capacity=2)
+        full_slot = StationSlot.objects.create(
+            station=self.station, event_day=self.day,
+            period=StationSlot.Period.FULL_DAY, capacity=2,
+        )
+        Assignment.objects.create(registration=self.registration(), station_slot=full_slot)
+        response = self.client.get(self.url)
+        card = next(card for card in response.context["cards"] if card["kind"] == "vacancy_reminder")
+        self.assertEqual(card["vacant_slot_count"], 3)
+        self.assertEqual({item["remaining"] for item in card["preview"]["vacancies"]}, {1})
+        self.assertNotIn("remaining_places", card)
+        self.assertContains(response, "Créneaux avec des places")
+        self.assertContains(response, "les disponibilités ne s’additionnent pas")
+        self.assertNotContains(response, "Places encore libres")
+        self.assertContains(response, 'data-whatsapp-share="whatsapp-vacancy_reminder"')
+        self.assertContains(response, 'data-whatsapp-copy="whatsapp-vacancy_reminder"')
+        self.assertContains(response, 'js/whatsapp-sharing.js?v=2')
 
     def test_family_and_anonymous_cannot_read_private_history_or_retry(self):
         self.delivery(failure_reason="Motif réservé à l’organisation")

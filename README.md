@@ -103,6 +103,11 @@ présentation publique proposée aux événements. Les journées uniques sont
 renseignées automatiquement ; les choix de journée restent visibles pour un
 modèle à plusieurs jours.
 
+Les places des postes sont partagées entre journée et demi-journées. Pour
+2 places sur chaque période, 1 personne à la journée + 1 le matin + 1 l’après-midi
+remplissent le poste : les capacités ne s’additionnent pas. Les compteurs du
+planning et les rappels tiennent compte de cette règle.
+
 **Créer un événement** utilise un seul formulaire : choisissez un modèle ou
 **Événement vierge**, puis renseignez le nom et la date. Depuis un modèle, les
 postes sont copiés dans un brouillon indépendant et les échéances sont décalées.

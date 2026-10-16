@@ -11,10 +11,21 @@ autorisation.
 ## Modèle relationnel
 
 Une famille contient plusieurs membres conservés d'une année à l'autre. Un événement
-contient des journées, des postes et des créneaux matin/après-midi. Une inscription
+contient des journées, des postes et des créneaux matin/après-midi/journée. Une inscription
 décrit une disponibilité et un souhait, tandis qu'une affectation distincte occupe un
 créneau. Les repas conservent une copie du tarif choisi. Les paiements sont des écritures
 manuelles, jamais déduites d'un clic SumUp.
+
+Les capacités d’un poste pour une date sont partagées : une affectation à la
+journée utilise une place le matin et une l’après-midi. Chaque période garde
+son quota local ; le budget simultané d’une demi-journée est le maximum du
+quota de cette demi-journée et de celui de la journée, jamais leur somme.
+Les réservations actives en brouillon ou confirmées consomment ces budgets.
+Le calcul commun de `volunteers/capacity.py` charge les périodes sœurs en lot,
+y compris lorsqu’un filtre familial ne montre qu’une partie des créneaux.
+La capacité restante d’une journée est la plus petite marge disponible sur
+ses deux demi-journées et son quota local. Le planning public utilise seulement
+les affectations confirmées et n’expose aucun objet privé d’inscription.
 
 Un événement utilisé est retiré par archivage pour conserver son historique.
 Après confirmation, les événements sans activité et les profils réutilisables
@@ -24,8 +35,10 @@ ou modifier ses horaires ne détache aucune donnée.
 
 ## Concurrence
 
-Les opérations d'affectation verrouillent les inscriptions, créneaux et affectations
-concernés avec `SELECT ... FOR UPDATE` dans une transaction. Les capacités, doublons,
+Les opérations d'affectation verrouillent les membres, journées, inscriptions,
+créneaux et affectations concernés avec `SELECT ... FOR UPDATE` dans une transaction.
+Le verrou de journée sérialise les demandes sur des périodes différentes d’un
+même poste. Les capacités, doublons,
 disponibilités et chevauchements horaires sont revérifiés au moment de l'écriture.
 
 ## Confidentialité

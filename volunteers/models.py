@@ -589,8 +589,11 @@ class StationSlot(UUIDTimeStampedModel):
             raise ValidationError(errors)
 
         if not getattr(self, "_defer_schedule_validation", False):
-            from .scheduling import validate_station_schedule
+            from .capacity import validate_slot_capacity_changes
+            from .scheduling import current_station_schedule, validate_station_schedule
 
+            context = current_station_schedule(self)
+            validate_slot_capacity_changes(context["slots"].values() if context else [self])
             validate_station_schedule([self])
 
     @transaction.atomic
@@ -620,16 +623,19 @@ class StationSlot(UUIDTimeStampedModel):
                     attribute = f"{field}_id" if field in ("station", "event_day") else field
                     setattr(self, attribute, getattr(locked, attribute))
         self.clean_fields()
+        from .capacity import validate_slot_capacity_changes
+
+        final_slots = context["slots"].values() if context else [self]
+        validate_slot_capacity_changes(final_slots)
         validate_station_schedule([self], locked_member_ids=member_ids)
         self.full_clean()
         super().save(*args, **kwargs)
 
     @property
     def remaining_capacity(self):
-        occupied = self.assignments.filter(
-            status__in=(Assignment.Status.DRAFT, Assignment.Status.CONFIRMED)
-        ).count()
-        return max(self.capacity - occupied, 0)
+        from .capacity import get_slot_capacity
+
+        return get_slot_capacity(self).remaining
 
     def overlaps(self, other: "StationSlot") -> bool:
         if self.event_day_id != other.event_day_id and self.event_day.date != other.event_day.date:
@@ -748,6 +754,15 @@ class Registration(UUIDTimeStampedModel):
                     legacy_orders.append(order)
             if legacy_orders:
                 MealOrder.objects.bulk_update(legacy_orders, ("beverage_availability",))
+            update_fields = kwargs.get("update_fields")
+            if (
+                locked_registration.status == self.Status.CANCELLED
+                and self.status == self.Status.ACTIVE
+                and (update_fields is None or "status" in update_fields)
+            ):
+                from .capacity import validate_registration_reactivation
+
+                validate_registration_reactivation(self)
         super().save(*args, **kwargs)
         if orders:
             from .official_pricing import reconcile_official_meal_orders
@@ -868,12 +883,22 @@ class Assignment(UUIDTimeStampedModel):
             except ValidationError as error:
                 errors["station_slot"] = error.messages
 
-            active_statuses = (self.Status.DRAFT, self.Status.CONFIRMED)
-            occupied = Assignment.objects.filter(
-                station_slot=slot, status__in=active_statuses
-            ).exclude(pk=self.pk).count()
-            if occupied >= slot.capacity:
-                errors["station_slot"] = _("Ce créneau ne dispose plus de place.")
+            from .capacity import get_slot_capacity
+
+            capacity = get_slot_capacity(slot, exclude_assignment_id=self.pk)
+            if capacity.remaining < 1:
+                # Conserver ou confirmer une réservation active n'ajoute aucune
+                # personne à un éventuel dépassement historique.
+                retained = Assignment.objects.filter(
+                    pk=self.pk, registration_id=self.registration_id, station_slot_id=slot.pk,
+                    status__in=(self.Status.DRAFT, self.Status.CONFIRMED),
+                    registration__status=Registration.Status.ACTIVE,
+                ).exists()
+                if not retained:
+                    errors["station_slot"] = _(
+                        "Ce créneau ne dispose plus de place "
+                        "(journée et demi-journées partagent les mêmes places)."
+                    )
         if errors:
             raise ValidationError(errors)
 

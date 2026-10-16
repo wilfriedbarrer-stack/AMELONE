@@ -53,7 +53,8 @@ class PublicPlanningPrivacyTests(DataMixin, TestCase):
         public_keys = {
             "slot_id", "station_name", "station_category", "category", "category_label",
             "is_official", "name", "description", "period", "schedule", "time_label",
-            "names", "people", "capacity", "taken", "remaining", "is_full", "fill_percent",
+            "names", "people", "capacity", "taken", "remaining", "blocked_elsewhere",
+            "is_full", "fill_percent",
         }
         for row in response.context["rows"]:
             self.assertEqual(set(row), public_keys)
