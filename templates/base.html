@@ -9,7 +9,7 @@
   <title>{% block title %}AMELONE LOISIRS{% endblock %}</title>
   <meta name="description" content="Gestion des bénévoles et des événements de l’association Amelone Loisirs.">
   <link rel="stylesheet" href="{% static 'css/app.css' %}?v=amelone-loisirs-5">
-  <link rel="stylesheet" href="{% static 'css/ergonomics.css' %}?v=3">
+  <link rel="stylesheet" href="{% static 'css/ergonomics.css' %}?v=4">
   <script src="{% static 'js/navigation.js' %}?v=1" defer></script>
   {% block extra_head %}{% endblock %}
 </head>
@@ -29,13 +29,24 @@
         <button class="navigation-toggle" type="button" aria-expanded="false" aria-controls="site-navigation" hidden><span aria-hidden="true">☰</span> Menu</button>
       </div>
 
-      {% if is_organizer and pending_assignment_count %}
+      {% if is_organizer %}{% if pending_assignment_count or pending_whatsapp_count %}
+      <div class="management-attention" aria-label="Actions de gestion à faire">
+      {% if pending_assignment_count %}
       <a class="assignment-attention-link" href="{% url 'organizer_dashboard' %}#affectations-a-faire">
         <span class="attention-count">{{ pending_assignment_count }}</span>
         <span>inscription{{ pending_assignment_count|pluralize }} à affecter</span>
         <span class="attention-action">Voir les participants →</span>
       </a>
       {% endif %}
+      {% if pending_whatsapp_count %}
+      <a class="whatsapp-attention-link" href="{% url 'organizer_dashboard' %}#whatsapp-a-envoyer">
+        <span class="attention-count">{{ pending_whatsapp_count }}</span>
+        <span>rappel{{ pending_whatsapp_count|pluralize }} WhatsApp à envoyer</span>
+        <span class="attention-action">Préparer le message →</span>
+      </a>
+      {% endif %}
+      </div>
+      {% endif %}{% endif %}
 
       <div class="site-navigation" id="site-navigation">
       <nav class="primary-nav" aria-label="Navigation principale">

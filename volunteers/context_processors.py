@@ -2,6 +2,20 @@ from django.conf import settings
 
 from .models import SiteBranding
 from .registration_attention import get_registration_attention
+from .whatsapp_attention import get_whatsapp_attention
+
+
+def request_whatsapp_attention(request):
+    """Only managers load the manual WhatsApp tasks, once per request."""
+    if not hasattr(request, "_whatsapp_attention"):
+        user = request.user
+        can_manage = user.is_authenticated and user.is_active and (
+            user.is_staff or getattr(user, "is_organizer", False)
+        )
+        request._whatsapp_attention = get_whatsapp_attention() if can_manage else {
+            "count": 0, "events": [], "tasks": [],
+        }
+    return request._whatsapp_attention
 
 
 def request_assignment_attention(request):
@@ -50,9 +64,12 @@ def _navigation_section(request):
 
 def navigation_context(request):
     attention = request_assignment_attention(request)
+    whatsapp_attention = request_whatsapp_attention(request)
     return {
         "assignment_attention": attention,
         "pending_assignment_count": attention["pending_count"],
+        "whatsapp_attention": whatsapp_attention,
+        "pending_whatsapp_count": whatsapp_attention["count"],
         "navigation_section": _navigation_section(request),
         "debug_mode": settings.DEBUG,
         "association_logo": SiteBranding.objects.filter(pk=1).values_list("logo_data", flat=True).first() or "",

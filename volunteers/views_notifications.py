@@ -7,15 +7,21 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 
 from .event_notifications import notification_preview, retry_event_notification_failures
-from .forms_notifications import RetryNotificationFailuresForm
+from .forms_notifications import RetryNotificationFailuresForm, WhatsAppReminderStatusForm
 from .models import Event, EventNotificationCampaign, EventNotificationDelivery
 from .notification_transports import get_channel_readiness
 from .views_organizer import organizer_required
+from .whatsapp_attention import (
+    get_event_whatsapp_status,
+    mark_whatsapp_shared,
+    reset_whatsapp_shared,
+)
 from .whatsapp_sharing import whatsapp_preview
 
 
@@ -60,6 +66,9 @@ def event_notifications(request, event_id):
             "whatsapp": whatsapp_preview(
                 event, kind, now=now, vacancies=preview["vacancies"], event_url=preview["event_url"],
             ),
+            "whatsapp_status": get_event_whatsapp_status(
+                event, now=now, vacancies=preview["vacancies"],
+            ).get(kind) if kind == EventNotificationCampaign.Kind.VACANCY_REMINDER else None,
             "scheduled_for": campaign.scheduled_for if campaign else (
                 event.registration_closes_at - timedelta(hours=48)
                 if kind == EventNotificationCampaign.Kind.VACANCY_REMINDER else None
@@ -77,3 +86,28 @@ def event_notifications(request, event_id):
         "uncertain_count": history.filter(status=EventNotificationDelivery.Status.UNCERTAIN).count(),
         "page_obj": Paginator(history, 20).get_page(request.GET.get("page")),
     })
+
+
+@organizer_required
+@require_POST
+@never_cache
+def whatsapp_reminder_status(request, event_id):
+    event = get_object_or_404(Event, pk=event_id)
+    form = WhatsAppReminderStatusForm(request.POST)
+    if form.is_valid():
+        try:
+            operation = mark_whatsapp_shared if form.cleaned_data["action"] == "mark_shared" else reset_whatsapp_shared
+            operation(
+                event, EventNotificationCampaign.Kind.VACANCY_REMINDER, request.user,
+                expected_registration_closes_at=form.cleaned_data["registration_closes_at"],
+            )
+        except ValidationError as error:
+            messages.error(request, " ".join(error.messages))
+        else:
+            if form.cleaned_data["action"] == "mark_shared":
+                messages.success(request, "Partage WhatsApp déclaré. L’alerte est retirée pour toute l’équipe de gestion.")
+            else:
+                messages.success(request, "Le partage n’est plus déclaré. L’alerte réapparaîtra si le rappel est à envoyer.")
+    else:
+        messages.error(request, "Action non valide. Rechargez la page avant de modifier le suivi WhatsApp.")
+    return redirect(reverse("event_notifications", args=[event.pk]) + "#whatsapp-vacancy_reminder-title")
