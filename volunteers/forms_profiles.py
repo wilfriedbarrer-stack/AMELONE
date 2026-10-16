@@ -101,7 +101,10 @@ class ProfileSlotForm(OrganizerFormMixin, forms.Form):
     period = forms.ChoiceField(
         label="Période", choices=[("", "Choisir une période"), *StationSlot.Period.choices],
     )
-    capacity = forms.IntegerField(label="Nombre de places", min_value=0, max_value=32767)
+    capacity = forms.IntegerField(
+        label="Nombre de places", min_value=0, max_value=32767,
+        help_text="Maximum pour cette période. Les places sont partagées avec les affectations à la journée.",
+    )
     start_time = forms.TimeField(
         label="Heure de début", required=False,
         widget=forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),

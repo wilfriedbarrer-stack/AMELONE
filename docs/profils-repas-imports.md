@@ -28,6 +28,15 @@ sans créer d’événement daté. Lorsque sa journée est unique, elle est rens
 automatiquement dans les créneaux ; le sélecteur reste présent pour plusieurs
 jours. La validation des jours, périodes et horaires reste appliquée.
 
+Les places d’un poste sont partagées entre journée et demi-journées, pour une
+même date. Avec 2 places sur chaque période, on peut affecter 1 personne à la
+journée, 1 le matin et 1 l’après-midi : il y a au maximum 2 personnes présentes
+en même temps. Deux personnes à la journée remplissent donc aussi le matin et
+l’après-midi. Les nombres des différentes périodes ne s’additionnent pas.
+Les brouillons et les affectations confirmées réservent ces places ; une
+affectation annulée les libère. Les profils et les duplications reprennent
+automatiquement cette règle, sans modifier les affectations existantes.
+
 **Créer un événement** utilise un seul formulaire. Choisir le modèle ou
 **Événement vierge — sans modèle**, renseigner le nom et la date, puis cliquer
 **Créer l’événement**. Avec un modèle, les postes et leurs réglages sont copiés

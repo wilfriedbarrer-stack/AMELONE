@@ -14,6 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from .capacity import get_slot_capacities
 from .event_profiles import create_event_from_profile
 from .forms_organizer import (
     AssignmentForm,
@@ -464,7 +465,7 @@ def assignment_board(request, event_id=None):
     if selected_day:
         registrations = (
             Registration.objects.filter(event_day=selected_day, status=Registration.Status.ACTIVE)
-            .select_related("member__family", "preferred_station")
+            .select_related("member__family", "preferred_station", "event_day")
             .prefetch_related("assignments__station_slot__station")
         )
         slots = (
@@ -473,7 +474,10 @@ def assignment_board(request, event_id=None):
             .prefetch_related(
                 Prefetch(
                     "assignments",
-                    queryset=Assignment.objects.exclude(status=Assignment.Status.CANCELLED).select_related(
+                    queryset=Assignment.objects.filter(
+                        status__in=(Assignment.Status.DRAFT, Assignment.Status.CONFIRMED),
+                        registration__status=Registration.Status.ACTIVE,
+                    ).select_related(
                         "registration__member"
                     ),
                     to_attr="active_assignments",
@@ -483,9 +487,13 @@ def assignment_board(request, event_id=None):
         for registration in registrations:
             registration.age = registration.age_on_event_day
             registration.birthday = registration.is_birthday
+        slots = list(slots)
+        capacities = get_slot_capacities(slots)
         for slot in slots:
-            slot.taken = len(slot.active_assignments)
-            slot.remaining = max(slot.capacity - slot.taken, 0)
+            capacity = capacities[slot.pk]
+            slot.taken = capacity.occupied
+            slot.remaining = capacity.remaining
+            slot.blocked_elsewhere = max(capacity.capacity - capacity.occupied - capacity.remaining, 0)
     return render(
         request,
         "volunteers/organizer/assignment_board.html",

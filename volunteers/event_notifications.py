@@ -4,6 +4,7 @@ L'acceptation par un prestataire n'est pas une preuve de livraison. Une tentativ
 dont le résultat est incertain reste en attente d'une vérification humaine.
 """
 
+from collections import defaultdict
 from datetime import timedelta
 from zoneinfo import ZoneInfo
 
@@ -11,13 +12,13 @@ from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.validators import validate_email
 from django.db import connection, transaction
-from django.db.models import Count, F, Q
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone, translation
 from django.utils.formats import date_format
 
+from .capacity import get_slot_capacities
 from .models import (
-    Assignment,
     Event,
     EventNotificationCampaign,
     EventNotificationDelivery,
@@ -37,6 +38,10 @@ PARIS = ZoneInfo("Europe/Paris")
 PUBLICATION = "publication"
 VACANCY_REMINDER = "vacancy_reminder"
 CHANNELS = ("email", "sms")
+SHARED_PLACES_NOTE = (
+    "Pour un même poste et une même date, les places à la journée et à la demi-journée "
+    "sont partagées : les disponibilités ne s’additionnent pas."
+)
 
 
 def _locked(queryset, *, skip_locked=False):
@@ -46,25 +51,29 @@ def _locked(queryset, *, skip_locked=False):
 
 
 def _vacancies(event, now):
-    occupied = Q(
-        assignments__status__in=(Assignment.Status.DRAFT, Assignment.Status.CONFIRMED),
-        assignments__registration__status=Registration.Status.ACTIVE,
-    )
-    slots = StationSlot.objects.filter(
+    slots = list(StationSlot.objects.filter(
         station__event=event, station__is_active=True,
         event_day__date__gte=timezone.localdate(now, PARIS),
-    ).select_related("station", "event_day").annotate(
-        occupied_count=Count("assignments", filter=occupied),
-    ).filter(capacity__gt=F("occupied_count")).order_by(
+    ).select_related("station", "event_day").order_by(
         "event_day__date", "station__position", "station__name", "period",
-    )
+    ))
+    capacities = get_slot_capacities(slots)
+    periods = defaultdict(set)
+    for slot in slots:
+        if slot.capacity > 0:
+            periods[(slot.station_id, slot.event_day_id)].add(slot.period)
+    shared_groups = {
+        group for group, choices in periods.items()
+        if StationSlot.Period.FULL_DAY in choices and len(choices) > 1
+    }
     return [{
         "slot_id": slot.pk, "station_name": slot.station.name,
         "date": slot.event_day.date, "period": slot.get_period_display(),
         "start_time": slot.start_time, "end_time": slot.end_time,
-        "remaining": slot.capacity - slot.occupied_count,
+        "remaining": capacities[slot.pk].remaining,
         "is_official": slot.station.category == "official",
-    } for slot in slots]
+        "shared_places": (slot.station_id, slot.event_day_id) in shared_groups,
+    } for slot in slots if capacities[slot.pk].remaining > 0]
 
 
 def _audience(event, kind):
@@ -90,6 +99,7 @@ def notification_preview(event, kind, *, now=None):
         raise ValueError("Type de notification inconnu.")
     now = now or timezone.now()
     vacancies = _vacancies(event, now)
+    has_shared_places = any(item["shared_places"] for item in vacancies)
     event_url = settings.SITE_URL.rstrip("/") + reverse("family_event_detail", args=[event.pk])
     dates = list(event.days.order_by("date").values_list("date", flat=True))
     date_text = ", ".join(_french_date(day) for day in dates)
@@ -121,6 +131,8 @@ def notification_preview(event, kind, *, now=None):
     lines.append(f"Clôture des inscriptions : {closing} (heure de Paris).")
     if kind == VACANCY_REMINDER:
         lines.extend(["", "Les places disponibles au moment de cet envoi :"])
+        if has_shared_places:
+            lines.append(SHARED_PLACES_NOTE)
         for vacancy in vacancies:
             hours = (
                 f" · {vacancy['start_time']:%H:%M}–{vacancy['end_time']:%H:%M}"
@@ -137,7 +149,9 @@ def notification_preview(event, kind, *, now=None):
     sms_text = f"AMELONE : {sms_intro} - {short_name}. {event_url}"
     return {
         "subject": subject, "body_text": "\n".join(lines), "sms_text": sms_text,
-        "vacancies": vacancies, "recipient_count": _audience(event, kind).count(),
+        "vacancies": vacancies, "has_shared_places": has_shared_places,
+        "shared_places_note": SHARED_PLACES_NOTE,
+        "recipient_count": _audience(event, kind).count(),
         "event_url": event_url, "scheduled_for": (
             event.registration_closes_at - timedelta(hours=48) if kind == VACANCY_REMINDER else now
         ),

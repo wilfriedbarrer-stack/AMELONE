@@ -170,6 +170,18 @@
   .button-row > .button { max-width: 100%; white-space: normal; }
 }
 
+@media screen and (max-width: 29rem) {
+  .planning-row { grid-template-columns: minmax(0, 1fr); }
+  .planning-row > .planning-role,
+  .planning-row > .planning-slot,
+  .planning-row > .planning-people,
+  .planning-row > .capacity {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    text-align: left;
+  }
+}
+
 @media print {
   .header-quick-actions, .site-navigation, .event-workspace-nav, .section-tabs { display: none !important; }
 }

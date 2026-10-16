@@ -110,6 +110,34 @@ class WhatsAppSharingTests(DataMixin, TestCase):
         self.assertEqual(result["share_url"], "")
         self.assertTrue(whatsapp_preview(self.event, "publication")["can_share"])
 
+    def test_shared_full_day_and_half_days_display_real_vacancies_with_an_explanation(self):
+        StationSlot.objects.filter(pk__in=(self.morning_slot.pk, self.afternoon_slot.pk)).update(capacity=2)
+        full_slot = StationSlot.objects.create(
+            station=self.station, event_day=self.day,
+            period=StationSlot.Period.FULL_DAY, capacity=2,
+        )
+        Assignment.objects.create(registration=self.registration(), station_slot=full_slot)
+        result = whatsapp_preview(self.event, "vacancy_reminder")
+        self.assertTrue(result["can_share"])
+        self.assertIn("Journée", result["body_text"])
+        self.assertIn("Matin", result["body_text"])
+        self.assertIn("Après-midi", result["body_text"])
+        self.assertEqual(result["body_text"].count(": 1 place(s)"), 3)
+        self.assertIn("les disponibilités ne s’additionnent pas", result["body_text"])
+        self.assertIn("Merci pour votre aide et votre bonne humeur 💚", result["body_text"])
+
+    def test_full_day_assignments_suppress_half_day_reminder_when_shared_station_is_full(self):
+        full_slot = StationSlot.objects.create(
+            station=self.station, event_day=self.day,
+            period=StationSlot.Period.FULL_DAY, capacity=2,
+        )
+        for member in (self.member, self.other_member):
+            Assignment.objects.create(registration=self.registration(member=member), station_slot=full_slot)
+        result = whatsapp_preview(self.event, "vacancy_reminder")
+        self.assertFalse(result["can_share"])
+        self.assertEqual(result["share_url"], "")
+        self.assertIn("Tous les postes sont pourvus", result["unavailable_reason"])
+
     def test_long_vacancy_list_is_bounded_and_points_to_complete_event(self):
         for index in range(12):
             station = Station.objects.create(event=self.event, name=f"Renfort numéro {index:02}", position=index + 10)

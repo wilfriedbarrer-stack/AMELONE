@@ -64,7 +64,7 @@ def event_notifications(request, event_id):
                 event.registration_closes_at - timedelta(hours=48)
                 if kind == EventNotificationCampaign.Kind.VACANCY_REMINDER else None
             ),
-            "remaining_places": sum(item["remaining"] for item in preview["vacancies"]),
+            "vacant_slot_count": len(preview["vacancies"]),
         })
     history = EventNotificationDelivery.objects.filter(campaign__event=event).select_related(
         "campaign", "family__account",

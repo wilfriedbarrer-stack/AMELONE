@@ -11,6 +11,7 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import format_html
 
+from .capacity import get_slot_capacities, get_slot_capacity
 from .forms_scheduling import ScheduleValidatedInlineFormSet
 from .models import (
     Assignment,
@@ -453,10 +454,27 @@ class StationSlotAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
         "end_time",
         "capacity",
         "active_assignment_count",
+        "shared_remaining_capacity",
     )
     list_filter = ("period", "event_day__event", "event_day__date")
     search_fields = ("station__name", "station__event__name")
     autocomplete_fields = ("station", "event_day")
+
+    def changelist_view(self, request, extra_context=None):
+        response = super().changelist_view(request, extra_context=extra_context)
+        changelist = getattr(response, "context_data", {}).get("cl")
+        if changelist is not None:
+            slots = list(changelist.result_list)
+            capacities = get_slot_capacities(slots)
+            for slot in slots:
+                slot._admin_capacity = capacities[slot.pk]
+            changelist.result_list = slots
+        return response
+
+    @staticmethod
+    def _capacity_for(obj):
+        capacity = getattr(obj, "_admin_capacity", None)
+        return capacity if capacity is not None else get_slot_capacity(obj)
 
     def _changeform_view(self, request, object_id, form_url, extra_context):
         with ExitStack() as stack:
@@ -486,11 +504,13 @@ class StationSlotAdmin(ReadOnlyTimestampsMixin, admin.ModelAdmin):
                         return HttpResponseRedirect(request.path)
             return super()._changeform_view(request, object_id, form_url, extra_context)
 
-    @admin.display(description="Affectations actives")
+    @admin.display(description="Affectations sur ce créneau")
     def active_assignment_count(self, obj):
-        return obj.assignments.filter(
-            status__in=(Assignment.Status.DRAFT, Assignment.Status.CONFIRMED)
-        ).count()
+        return self._capacity_for(obj).occupied
+
+    @admin.display(description="Places restantes (périodes partagées)")
+    def shared_remaining_capacity(self, obj):
+        return self._capacity_for(obj).remaining
 
 
 class AssignmentInline(admin.TabularInline):

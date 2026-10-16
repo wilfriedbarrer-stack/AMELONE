@@ -208,6 +208,10 @@ class StationSlotForm(OrganizerFormMixin, forms.ModelForm):
     class Meta:
         model = StationSlot
         fields = ("event_day", "period", "capacity", "start_time", "end_time")
+        labels = {"capacity": "Nombre de places"}
+        help_texts = {
+            "capacity": "Maximum pour cette période. Les places sont partagées avec les affectations à la journée.",
+        }
         widgets = {
             "start_time": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
             "end_time": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
