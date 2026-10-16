@@ -1758,3 +1758,33 @@ class SiteBranding(models.Model):
 
     logo_data = models.TextField(blank=True)
     sumup_payment_url = models.URLField(_("lien SumUp de l’association"), blank=True, db_default="")
+
+
+class EventWhatsAppShare(UUIDTimeStampedModel):
+    """Déclaration humaine de partage, indépendante des campagnes automatiques."""
+
+    class Kind(models.TextChoices):
+        PUBLICATION = "publication", _("Annonce du nouvel événement")
+        VACANCY_REMINDER = "vacancy_reminder", _("Rappel des postes à pourvoir")
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="whatsapp_shares")
+    kind = models.CharField(_("type de message"), max_length=24, choices=Kind.choices)
+    shared_at = models.DateTimeField(_("déclaré envoyé le"), default=timezone.now)
+    shared_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="declared_whatsapp_shares", verbose_name=_("déclaré par"),
+    )
+    registration_closes_at = models.DateTimeField(
+        _("clôture des inscriptions lors du partage"), null=True, blank=True,
+    )
+
+    class Meta:
+        ordering = ("-shared_at", "pk")
+        constraints = [
+            models.UniqueConstraint(fields=("event", "kind"), name="unique_event_whatsapp_share_kind"),
+        ]
+        verbose_name = _("partage WhatsApp déclaré")
+        verbose_name_plural = _("partages WhatsApp déclarés")
+
+    def __str__(self):
+        return f"{self.event.name} — {self.get_kind_display()}"

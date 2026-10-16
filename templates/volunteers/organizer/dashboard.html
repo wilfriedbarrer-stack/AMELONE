@@ -3,6 +3,12 @@
 {% block content %}
 <header class="page-header"><div class="shell header-copy"><div><span class="eyebrow">Gestion de l’association</span><h1>Accueil de gestion</h1><p>Retrouvez vos événements et les actions qui restent à préparer.</p></div><div class="button-row"><a class="button button-primary" href="{% url 'event_create' %}">Créer un événement</a><a class="button button-secondary" href="{% url 'annual_tracking' %}">Suivi annuel</a></div></div></header>
 <div class="shell page-stack">
+  {% if pending_whatsapp_count %}
+  <section class="panel whatsapp-attention-panel" id="whatsapp-a-envoyer" aria-labelledby="whatsapp-attention-title">
+    <div class="panel-heading"><div><h2 id="whatsapp-attention-title">{{ pending_whatsapp_count }} rappel{{ pending_whatsapp_count|pluralize }} WhatsApp à envoyer</h2><p>Les inscriptions ferment dans moins de 48 heures et il reste des postes à pourvoir. Partagez le message dans le groupe bénévoles, puis déclarez le partage sur le site.</p></div></div>
+    {% for task in whatsapp_attention.tasks %}<div class="list-item attention-event"><div><strong>{{ task.event_name }}</strong><small>Clôture des inscriptions : {{ task.registration_closes_at|date:"d/m/Y à H:i" }}</small></div><a class="button button-secondary button-small" href="{{ task.url }}">Préparer le rappel WhatsApp</a></div>{% endfor %}
+  </section>
+  {% endif %}
   <section class="stat-grid" aria-label="Activité de l’association">
     <article class="stat-card"><span class="stat-value">{{ open_event_count }}</span><span class="stat-label">événement{{ open_event_count|pluralize }} ouvert{{ open_event_count|pluralize }}</span></article>
     <article class="stat-card"><span class="stat-value">{{ family_count }}</span><span class="stat-label">famille{{ family_count|pluralize }}</span></article>

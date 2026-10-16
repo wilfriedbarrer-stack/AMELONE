@@ -46,7 +46,7 @@
         <h3>WhatsApp manuel</h3>
         <p><span class="badge badge-success">Sans configuration</span></p>
         <p>Partagez le message ou copiez-le dans votre groupe de bénévoles, puis confirmez l’envoi dans WhatsApp. Tout le groupe pourra le lire.</p>
-        <p class="help-text">Aucun envoi automatique ni confirmation d’envoi sur le site.</p>
+        <p class="help-text">Après avoir envoyé le rappel dans WhatsApp, déclarez le partage ci-dessous pour retirer l’alerte de toute l’équipe. Le site ne vérifie pas sa réception dans le groupe.</p>
       </article>
       {% for channel in channels %}
       <article>
@@ -62,6 +62,7 @@
     <div class="panel-heading"><h2 id="notification-{{ card.kind }}-title">{{ card.title }}</h2></div>
     <div class="notification-message" aria-labelledby="whatsapp-{{ card.kind }}-title">
       <h3 id="whatsapp-{{ card.kind }}-title">Message pour le groupe WhatsApp</h3>
+      {% if card.whatsapp_status.is_due %}<p class="badge badge-warning">Rappel WhatsApp à envoyer</p>{% endif %}
       {% if not card.whatsapp.can_share %}<p class="help-text">{{ card.whatsapp.unavailable_reason }}</p>{% endif %}
       <div class="field">
         <label for="whatsapp-{{ card.kind }}">Message prêt à partager</label>
@@ -77,6 +78,18 @@
       <p class="help-text">Dans le menu de partage, choisissez WhatsApp puis votre groupe. Si les emojis disparaissent avec « Ouvrir WhatsApp », collez le message copié. Vérifiez le texte avant l’envoi.</p>
       <p id="whatsapp-feedback-{{ card.kind }}" class="help-text" role="status" aria-live="polite"></p>
       {% endif %}
+      {% if card.whatsapp_status %}{% if card.whatsapp_status.shared or card.whatsapp.can_share %}
+      <div class="whatsapp-follow-up">
+        {% if card.whatsapp_status.shared %}
+        <p class="whatsapp-shared-status"><strong>Partage déclaré le {{ card.whatsapp_status.shared_at|date:"d/m/Y à H:i" }}{% if card.whatsapp_status.shared_by %} par {{ card.whatsapp_status.shared_by.get_full_name|default:card.whatsapp_status.shared_by.email }}{% endif %}.</strong> L’alerte est retirée pour toute l’équipe de gestion.</p>
+        <form method="post" action="{% url 'whatsapp_reminder_status' event.pk %}">{% csrf_token %}<input type="hidden" name="action" value="reset_shared"><input type="hidden" name="registration_closes_at" value="{{ event.registration_closes_at|date:'c' }}"><button class="button button-quiet button-small" type="submit">Remettre l’alerte</button></form>
+        {% elif card.whatsapp.can_share %}
+        {% if not card.whatsapp_status.is_due %}<p class="help-text">L’alerte apparaîtra 48 heures avant la clôture s’il reste des postes libres.</p>{% endif %}
+        <p class="help-text">Une fois le rappel réellement envoyé dans le groupe, retirez l’alerte pour les autres organisateurs.</p>
+        <form method="post" action="{% url 'whatsapp_reminder_status' event.pk %}">{% csrf_token %}<input type="hidden" name="action" value="mark_shared"><input type="hidden" name="registration_closes_at" value="{{ event.registration_closes_at|date:'c' }}"><button class="button button-secondary" type="submit">J’ai envoyé le message dans le groupe</button></form>
+        {% endif %}
+      </div>
+      {% endif %}{% endif %}
     </div>
     {% if card.kind == 'vacancy_reminder' %}
     <details class="participation-section">
