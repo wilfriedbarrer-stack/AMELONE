@@ -90,6 +90,22 @@ Source : [expéditeurs et domaines Brevo](https://developers.brevo.com/docs/gett
 La préparation du code ou la présence d’une clé ne crée pas un compte prestataire,
 ne prouve pas l’approbation de l’expéditeur.
 
+### Vérifier la connexion sans envoyer de message
+
+La commande `python manage.py check_brevo_connection` contrôle la clé déjà
+stockée sur le serveur et l'expéditeur configuré, via les lectures HTTPS Brevo
+`GET /account` et `GET /senders`. Elle ne consulte pas les familles, ne crée
+aucune notification et n'envoie aucun email. Sa sortie contient seulement des
+états et un motif générique, sans clé, adresse de compte ni réponse brute.
+
+Pour un contrôle ponctuel sur Render, définir `BREVO_VERIFY_ON_DEPLOY=1`, en
+gardant `EMAIL_ENABLED=0` et `EVENT_NOTIFICATIONS_ENABLED=0`. Le déploiement
+effectue la vérification et écrit un résultat `BREVO_CONNECTION_CHECK` dans ses
+journaux. Le contrôle ne bloque pas la publication de WhatsApp si Brevo n'est
+pas prêt. Après un résultat positif, remettre `BREVO_VERIFY_ON_DEPLOY=0` avant
+d'activer les emails. Le contrôle confirme l'accès au compte et la validation
+de l'expéditeur, pas la livraison d'un message.
+
 ### Variables de l’application
 
 Le transport lit les variables suivantes. L’exemple conserve tous les envois
