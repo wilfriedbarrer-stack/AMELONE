@@ -1,5 +1,6 @@
 """Authentification du workflow GitHub par son identité OIDC signée et limitée."""
 
+import logging
 from functools import lru_cache
 
 import jwt
@@ -18,6 +19,7 @@ REQUIRED_CLAIMS = (
     "exp", "iat", "iss", "aud", "sub", "repository", "repository_id",
     "repository_owner_id", "ref", "workflow_ref", "event_name",
 )
+logger = logging.getLogger(__name__)
 
 
 class NotificationJobUnauthorized(Exception):
@@ -39,13 +41,21 @@ def _github_jwks_client():
 def _expected_claims():
     repository = settings.EVENT_NOTIFICATIONS_JOB_REPOSITORY
     ref = settings.EVENT_NOTIFICATIONS_JOB_REF
+    owner, name = repository.split("/", 1)
+    # AMELONE was created on 2026-10-14. GitHub repositories created after
+    # 2026-07-15 use immutable subjects; the previous name-only subject is invalid.
+    # https://docs.github.com/en/actions/reference/security/oidc#immutable-subject-claims
+    subject_repository = (
+        f"{owner}@{settings.EVENT_NOTIFICATIONS_JOB_OWNER_ID}/"
+        f"{name}@{settings.EVENT_NOTIFICATIONS_JOB_REPOSITORY_ID}"
+    )
     return {
         "repository": repository,
         "repository_id": settings.EVENT_NOTIFICATIONS_JOB_REPOSITORY_ID,
         "repository_owner_id": settings.EVENT_NOTIFICATIONS_JOB_OWNER_ID,
         "ref": ref,
         "workflow_ref": settings.EVENT_NOTIFICATIONS_JOB_WORKFLOW_REF,
-        "sub": f"repo:{repository}:ref:{ref}",
+        "sub": f"repo:{subject_repository}:ref:{ref}",
     }
 
 
@@ -72,6 +82,7 @@ def verify_notification_job_token(token):
     except (PyJWKError, PyJWKSetError) as error:
         raise NotificationJobUnavailable() from error
     except PyJWKClientError as error:
+        logger.warning("Notification scheduler identity rejected: signing_key_unavailable.")
         raise NotificationJobUnauthorized() from error
     except (OSError, ValueError) as error:
         raise NotificationJobUnavailable() from error
@@ -82,11 +93,19 @@ def verify_notification_job_token(token):
             issuer=GITHUB_ISSUER, options={"require": list(REQUIRED_CLAIMS), "strict_aud": True},
         )
     except (jwt.InvalidTokenError, ValueError, TypeError, OverflowError) as error:
+        # The exception type is useful for operations; its message can contain
+        # claims from the token and must never be logged.
+        logger.warning("Notification scheduler identity rejected: %s.", type(error).__name__)
         raise NotificationJobUnauthorized() from error
     if any(type(claims[name]) not in (int, float) for name in ("exp", "iat", "nbf") if name in claims):
+        logger.warning("Notification scheduler identity rejected: timestamp_type.")
         raise NotificationJobUnauthorized()
-    if any(claims.get(key) != value for key, value in _expected_claims().items()):
+    mismatched_claims = [key for key, value in _expected_claims().items() if claims.get(key) != value]
+    if mismatched_claims:
+        # These are fixed, public claim names, never their received values.
+        logger.warning("Notification scheduler identity rejected: claims %s.", ", ".join(mismatched_claims))
         raise NotificationJobUnauthorized()
     if claims.get("event_name") not in ("schedule", "workflow_dispatch"):
+        logger.warning("Notification scheduler identity rejected: event_name.")
         raise NotificationJobUnauthorized()
     return claims

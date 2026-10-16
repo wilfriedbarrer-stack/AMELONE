@@ -81,9 +81,13 @@ class EventForm(OrganizerFormMixin, forms.ModelForm):
             "notify_publication",
             "notify_vacancies",
             "notify_email",
-            "notify_sms",
             "status",
         )
+        labels = {
+            "notify_publication": "Annoncer le nouvel événement par email",
+            "notify_vacancies": "Rappeler les postes libres par email, 48 h avant la clôture",
+            "notify_email": "Autoriser les emails automatiques pour cet événement",
+        }
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4}),
             "general_instructions": forms.Textarea(attrs={"rows": 4}),
@@ -144,6 +148,12 @@ class EventForm(OrganizerFormMixin, forms.ModelForm):
                     "La date principale doit rester avant les autres dates de cet événement."
                 )
         return event_date
+
+    def save(self, commit=True):
+        # Le partage au groupe bénévoles se fait manuellement dans WhatsApp.
+        # Un ancien réglage SMS ne doit pas être réactivé par le formulaire.
+        self.instance.notify_sms = False
+        return super().save(commit=commit)
 
 
 class EventDayForm(OrganizerFormMixin, forms.ModelForm):

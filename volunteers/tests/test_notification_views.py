@@ -63,7 +63,8 @@ class EventNotificationViewTests(DataMixin, TestCase):
         self.assertEqual(cards["vacancy_reminder"]["remaining_places"], 3)
         self.assertEqual(cards["vacancy_reminder"]["scheduled_for"], self.event.registration_closes_at - timedelta(hours=48))
         self.assertContains(response, "48 heures avant la clôture")
-        self.assertContains(response, "Les envois automatiques sont désactivés.")
+        self.assertContains(response, "Les e-mails automatiques sont désactivés.")
+        self.assertContains(response, "Le partage manuel sur WhatsApp reste disponible")
         self.assertContains(response, "https://amelone.onrender.com" + reverse("family_event_detail", args=[self.event.pk]))
         self.assertNotContains(response, "Réessayer les échecs")
         self.assertIn("no-store", response.headers["Cache-Control"])
@@ -103,9 +104,10 @@ class EventNotificationViewTests(DataMixin, TestCase):
         response = self.client.get(self.url)
         self.assertTrue(response.context["automation_enabled"])
         self.assertTrue(response.context["channels"][0]["ready"])
-        self.assertFalse(response.context["channels"][1]["ready"])
+        self.assertEqual(len(response.context["channels"]), 1)
         self.assertContains(response, "via Brevo est configuré")
-        self.assertContains(response, "L’envoi de SMS est désactivé.")
+        self.assertContains(response, "WhatsApp manuel")
+        self.assertNotContains(response, "L’envoi de SMS")
         self.assertNotContains(response, "SENSITIVE_KEY_MUST_NEVER_BE_RENDERED")
 
     def test_post_retries_only_failed_for_this_event_without_sending(self):

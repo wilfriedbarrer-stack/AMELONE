@@ -11,7 +11,7 @@
     <div class="event-workspace-actions-list">
       <a href="{% url 'event_update' event.pk %}">Modifier les informations</a>
       <a href="{% url 'event_emails' event.pk %}">Messages aux participants</a>
-      <a href="{% url 'event_notifications' event.pk %}">Annonces et rappels</a>
+      <a href="{% url 'event_notifications' event.pk %}">Annonces et rappels · WhatsApp et emails</a>
       <a href="{% url 'event_duplicate' event.pk %}">Dupliquer l’événement</a>
       <a href="{% url 'event_profile_save' event.pk %}">Enregistrer comme modèle</a>
       {% if event.status == 'published' %}<a href="{% url 'public_planning' %}?event={{ event.pk }}">Voir le planning public</a>{% endif %}

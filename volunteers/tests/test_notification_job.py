@@ -1,7 +1,10 @@
+import io
 import time
+from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError
 
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -45,7 +48,7 @@ class NotificationJobAuthenticationTests(SimpleTestCase):
             "repository": "wilfriedbarrer-stack/AMELONE", "repository_id": "1419056471",
             "repository_owner_id": "342539682", "ref": "refs/heads/main",
             "workflow_ref": "wilfriedbarrer-stack/AMELONE/.github/workflows/event-notifications.yml@refs/heads/main",
-            "sub": "repo:wilfriedbarrer-stack/AMELONE:ref:refs/heads/main",
+            "sub": "repo:wilfriedbarrer-stack@342539682/AMELONE@1419056471:ref:refs/heads/main",
             "event_name": "schedule", **changes,
         }
 
@@ -113,6 +116,35 @@ class NotificationJobAuthenticationTests(SimpleTestCase):
         for changes in wrong_claims:
             with self.subTest(changes=changes):
                 self.assert_rejected(self.post(self.token(claims=self.claims(**changes))))
+
+    def test_legacy_subject_or_different_immutable_owner_repository_and_context_are_rejected(self):
+        subjects = (
+            "repo:wilfriedbarrer-stack/AMELONE:ref:refs/heads/main",
+            "repo:wilfriedbarrer-stack@999/AMELONE@1419056471:ref:refs/heads/main",
+            "repo:wilfriedbarrer-stack@342539682/AMELONE@999:ref:refs/heads/main",
+            "repo:someone@342539682/AMELONE@1419056471:ref:refs/heads/main",
+            "repo:wilfriedbarrer-stack@342539682/another@1419056471:ref:refs/heads/main",
+            "repo:wilfriedbarrer-stack@342539682/AMELONE@1419056471:ref:refs/heads/feature",
+            "repo:wilfriedbarrer-stack@342539682/AMELONE@1419056471:environment:production",
+        )
+        for subject in subjects:
+            with self.subTest(subject=subject):
+                self.assert_rejected(self.post(self.token(claims=self.claims(sub=subject))))
+
+    def test_identity_diagnostics_never_log_token_claim_values_or_raw_provider_errors(self):
+        token = self.token(claims=self.claims(sub="private-subject@example.test"))
+        with self.assertLogs("volunteers.notification_job_auth", level="WARNING") as diagnostic:
+            self.assert_rejected(self.post(token))
+        output = "\n".join(diagnostic.output)
+        self.assertIn("claims sub", output)
+        self.assertNotIn("private-subject@example.test", output)
+        self.assertNotIn(token, output)
+        with patch("volunteers.notification_job_auth.jwt.decode", side_effect=jwt.InvalidIssuerError("private detail")):
+            with self.assertLogs("volunteers.notification_job_auth", level="WARNING") as diagnostic:
+                self.assert_rejected(self.post())
+        output = "\n".join(diagnostic.output)
+        self.assertIn("InvalidIssuerError", output)
+        self.assertNotIn("private detail", output)
 
     def test_missing_required_claims_are_rejected(self):
         for name in ("exp", "iat", "iss", "aud", "sub", "repository", "repository_id",
@@ -202,17 +234,43 @@ class NotificationJobAuthenticationTests(SimpleTestCase):
 
 
 class NotificationWorkflowTests(SimpleTestCase):
-    def test_scheduled_workflow_inline_python_compiles_and_uses_no_checkout_or_shared_secret(self):
+    def workflow_source(self):
         workflow = (Path(settings.BASE_DIR) / ".github/workflows/event-notifications.yml").read_text()
+        lines = workflow.splitlines()
+        start = lines.index("          python3 - <<'PY'") + 1
+        end = lines.index("          PY", start)
+        return workflow, "\n".join(line[10:] for line in lines[start:end])
+
+    def test_scheduled_workflow_inline_python_compiles_and_uses_no_checkout_or_shared_secret(self):
+        workflow, source = self.workflow_source()
         self.assertIn("7,22,37,52 * * * *", workflow)
         self.assertIn("id-token: write", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
         self.assertNotIn("secrets.", workflow)
         self.assertNotIn("actions/checkout", workflow)
-        lines = workflow.splitlines()
-        start = lines.index("          python3 - <<'PY'") + 1
-        end = lines.index("          PY", start)
-        source = "\n".join(line[10:] for line in lines[start:end])
         compile(source, "event-notifications.yml inline Python", "exec")
         self.assertIn('result.get("attempted", 0) == 0', source)
         self.assertIn('time.monotonic() - refreshed_at >= 120', source)
+
+    def test_http_failures_distinguish_github_identity_and_render_processing_without_error_details(self):
+        _, source = self.workflow_source()
+        for phase in ("identité GitHub", "traitement Render"):
+            with self.subTest(phase=phase):
+                opener = MagicMock()
+                failure = HTTPError("https://example.test", 401, "private provider detail", {}, None)
+                if phase == "identité GitHub":
+                    opener.open.side_effect = failure
+                else:
+                    identity = MagicMock()
+                    identity.__enter__.return_value = io.BytesIO(b'{"value":"test-only-identity"}')
+                    opener.open.side_effect = (identity, failure)
+                output = io.StringIO()
+                with patch("urllib.request.build_opener", return_value=opener), patch.dict("os.environ", {
+                    "ACTIONS_ID_TOKEN_REQUEST_URL": "https://example.test/identity?existing=value",
+                    "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "test-only-runtime-token",
+                }), redirect_stdout(output), self.assertRaises(SystemExit) as error:
+                    exec(compile(source, "event-notifications.yml inline Python", "exec"), {})
+                self.assertEqual(error.exception.code, 1)
+                self.assertIn("Interruption pendant " + phase + " (HTTP 401)", output.getvalue())
+                self.assertNotIn("private provider detail", output.getvalue())
+                self.assertNotIn("test-only-runtime-token", output.getvalue())

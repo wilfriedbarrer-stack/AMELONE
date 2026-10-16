@@ -227,24 +227,36 @@ Le script Render applique les migrations et exécute `collectstatic` lors de la
 publication. Le premier administrateur se crée avec `createsuperuser` ou le
 compte initial prévu par `bootstrap_admin`.
 
-## Annonces et rappels automatiques
+## WhatsApp manuel et emails automatiques
 
 Dans un événement, **Autres actions → Annonces et rappels** présente les aperçus
-email/SMS, les familles concernées et l’historique. Les réglages se trouvent dans
-**Modifier les informations → Annonces et rappels**.
+WhatsApp prêts à partager, les aperçus email, les familles concernées et l’historique. Les réglages email se trouvent dans
+**Modifier les informations → Emails automatiques et partage WhatsApp**.
+
+Pour WhatsApp, cliquer sur **Ouvrir WhatsApp**, choisir le groupe bénévoles, puis
+confirmer l’envoi. **Copier le message** permet aussi de le coller dans le groupe.
+Deux messages sont proposés : nouvel événement et postes encore libres, avec
+dates, clôture, lien d’inscription et jusqu’à huit créneaux disponibles. Le groupe
+entier peut les lire ; le rappel invite les personnes qui ne sont pas encore
+inscrites à participer. Aucun numéro ni lien privé de groupe n’est enregistré.
+Les messages sont disponibles pour les événements publiés à venir, avant clôture ;
+le rappel exige des inscriptions ouvertes et des places libres. Le partage reste
+disponible même si les emails sont désactivés. Le site ne confirme pas un envoi
+WhatsApp et ne déclenche pas de rappel WhatsApp automatique à 48 h.
 
 L’annonce de première publication concerne toutes les familles actives, une seule
 fois par événement. Le rappel intervient 48 h avant la clôture s’il reste des
 places ; seules les familles sans inscription active à cet événement sont
-concernées. Une famille reçoit au plus un message de chaque type par canal.
+concernées. Une famille reçoit au plus un email de chaque type.
 Les anciens événements ne sont pas réannoncés lors de la mise à jour.
 
 Le workflow GitHub vérifie la file toutes les quinze minutes, avec retards
 possibles. Il utilise l’identité temporaire GitHub de ce dépôt et de ce workflow,
 sans mot de passe de base de données ni secret partagé dans GitHub Actions.
 Les envois restent désactivés tant que le compte d’envoi et les expéditeurs ne
-sont pas configurés. Brevo est proposé : emails gratuits dans la limite de son
-offre, SMS sur crédits payants. Voir la [configuration et les offres](docs/emails.md).
+sont pas configurés. Brevo assure les emails, gratuits dans la limite de son
+offre. Les SMS sont désactivés ; aucun compte professionnel WhatsApp ni crédit
+SMS n’est nécessaire au partage manuel. Voir la [configuration](docs/emails.md).
 
 Une acceptation par le prestataire ne prouve pas la livraison. Les échecs certains
 peuvent être remis en attente depuis l’interface ; les résultats incertains
