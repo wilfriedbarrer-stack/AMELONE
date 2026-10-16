@@ -62,7 +62,7 @@ class EventNotificationViewTests(DataMixin, TestCase):
         cards = {card["kind"]: card for card in response.context["cards"]}
         self.assertEqual(cards["publication"]["preview"]["recipient_count"], 2)
         self.assertEqual(cards["vacancy_reminder"]["preview"]["recipient_count"], 1)
-        self.assertEqual(cards["vacancy_reminder"]["vacant_slot_count"], 2)
+        self.assertEqual(cards["vacancy_reminder"]["vacant_post_count"], 1)
         self.assertEqual(cards["vacancy_reminder"]["scheduled_for"], self.event.registration_closes_at - timedelta(hours=48))
         self.assertContains(response, "48 heures avant la clôture")
         self.assertContains(response, "Les e-mails automatiques sont désactivés.")
@@ -71,7 +71,7 @@ class EventNotificationViewTests(DataMixin, TestCase):
         self.assertNotContains(response, "Réessayer les échecs")
         self.assertIn("no-store", response.headers["Cache-Control"])
 
-    def test_shared_alternatives_show_vacant_slot_count_without_adding_places(self):
+    def test_shared_alternatives_show_one_post_without_adding_places(self):
         StationSlot.objects.filter(pk__in=(self.morning_slot.pk, self.afternoon_slot.pk)).update(capacity=2)
         full_slot = StationSlot.objects.create(
             station=self.station, event_day=self.day,
@@ -80,10 +80,12 @@ class EventNotificationViewTests(DataMixin, TestCase):
         Assignment.objects.create(registration=self.registration(), station_slot=full_slot)
         response = self.client.get(self.url)
         card = next(card for card in response.context["cards"] if card["kind"] == "vacancy_reminder")
-        self.assertEqual(card["vacant_slot_count"], 3)
+        self.assertEqual(card["vacant_post_count"], 1)
         self.assertEqual({item["remaining"] for item in card["preview"]["vacancies"]}, {1})
         self.assertNotIn("remaining_places", card)
-        self.assertContains(response, "Créneaux avec des places")
+        self.assertContains(response, "Postes avec des places")
+        self.assertContains(response, "2 places partagées")
+        self.assertContains(response, "dans ces mêmes places")
         self.assertContains(response, "les disponibilités ne s’additionnent pas")
         self.assertNotContains(response, "Places encore libres")
         self.assertContains(response, 'data-whatsapp-share="whatsapp-vacancy_reminder"')
