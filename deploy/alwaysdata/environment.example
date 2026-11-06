@@ -1,0 +1,29 @@
+# Modèle POSIX pour /home/amelone/private/amelone.env, jamais dans le dépôt.
+# Préférer init_env.py : il génère la clé et demande DATABASE_URL sans l'afficher.
+# Le fichier privé doit appartenir au compte et avoir les permissions 600.
+# Chaque ligne exporte une variable pour les commandes exécutées après `. fichier`.
+# Dans le panneau Alwaysdata, saisir le NOM et la VALEUR, sans `export` ni quotes shell.
+export DJANGO_SETTINGS_MODULE='amelone.settings_alwaysdata'
+export DJANGO_DEBUG='0'
+export ALWAYSDATA_SITE_HOST='amelone.alwaysdata.net'
+export ALWAYSDATA_HSTS_SECONDS='3600'
+
+# Valeurs fictives : les remplacer localement, sans les publier ni les envoyer au chat.
+# Pour DATABASE_URL, encoder les caractères réservés des identifiants dans l'URL.
+# Confirmer le mode TLS de la base cible ; ne pas copier celui de Render par défaut.
+export DJANGO_SECRET_KEY='A_GENERER_AVEC_INIT_ENV_PY'
+export DATABASE_URL='postgresql://UTILISATEUR:MOT_DE_PASSE_ENCODE@postgresql-amelone.alwaysdata.net:5432/amelone_amelone'
+
+# Préproduction silencieuse. Ces trois variables restent à 0 pendant les essais.
+export ALWAYSDATA_ENABLE_EMAILS='0'
+export EMAIL_ENABLED='0'
+export EVENT_NOTIFICATIONS_ENABLED='0'
+export EMAIL_PROVIDER='brevo'
+export BREVO_API_KEY=''
+export DEFAULT_FROM_EMAIL='AMELONE <ADRESSE_EXPEDITEUR_VALIDEE>'
+
+# Désactivés aussi dans settings_alwaysdata ; ne pas activer de SMS à la bascule.
+export SMS_ENABLED='0'
+
+# SITE_URL, ALLOWED_HOSTS et CSRF_TRUSTED_ORIGINS sont dérivés du seul hôte ci-dessus.
+# Ne pas ajouter RENDER_EXTERNAL_HOSTNAME, RENDER_EXTERNAL_URL ou INITIAL_ADMIN_*.
