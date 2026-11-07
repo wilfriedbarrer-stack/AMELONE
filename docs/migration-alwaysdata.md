@@ -20,6 +20,12 @@ dépôt ; la capture suivante confirme l'ajout de sa partie publique dans Always
 Elle n'a pas encore été utilisée pour se connecter. Empreinte publique :
 `SHA256:+MNBVCz94JPTi/cuXbVxkz0+yQ7GuryUEF7O1IBkpN4`.
 
+La session de terminal web de l'utilisateur confirme ensuite le clonage de
+`migration/alwaysdata` dans `/home/amelone/www/amelone`, Python **3.12.15** et
+le client `pg_dump (PostgreSQL) 18.4`. Cette dernière sortie décrit le client,
+pas le serveur PostgreSQL cible. La connexion à `amelone_prod`, la version du
+serveur, son chiffrement et l'absence de tables restent à vérifier avant import.
+
 ## 1. Choisir le compte et le coût avant la bascule
 
 Les [tarifs officiels Alwaysdata](https://help.alwaysdata.com/en/docs/admin-billing/billing/public-cloud-prices/)
@@ -136,6 +142,22 @@ Le dernier résultat doit être zéro avant le premier import. Confirmer les
 extensions et la collation nécessaires au dump. La cible est une base de migration
 vide ; elle ne doit contenir ni compte administrateur créé à la main, ni données
 de démonstration.
+
+Sans fichier de service encore configuré, le terminal web permet une première
+vérification en lecture seule avec une saisie masquée du mot de passe PostgreSQL :
+
+```bash
+PGCONNECT_TIMEOUT=15 psql -X -W -v ON_ERROR_STOP=1 \
+  -h postgresql-amelone.alwaysdata.net -U amelone -d amelone_prod \
+  -c 'SHOW server_version;' -c '\conninfo' \
+  -c "SELECT count(*) AS tables_publiques FROM pg_tables WHERE schemaname = 'public';"
+```
+
+Le mot de passe demandé est celui de l'utilisateur PostgreSQL `amelone`, configuré
+dans la rubrique des utilisateurs PostgreSQL ; ne pas le mettre dans le bloc collé
+ni dans une capture. Le client `pg_dump` 18.4 observé est compatible avec une source
+18.6 car ils partagent la même version majeure ; conserver cette compatibilité
+majeure pour la répétition et l'export final.
 
 ## 4. Préparer l'environnement privé et le site WSGI
 
