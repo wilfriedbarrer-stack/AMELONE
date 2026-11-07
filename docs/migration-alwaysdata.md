@@ -8,6 +8,11 @@ cette préparation. Aucune donnée de production n'a été copiée. La base Rend
 au **13 novembre 2026** lors du contrôle du 6 novembre : effectuer la sauvegarde et
 la répétition avant cette date, puis revérifier l'échéance dans Render.
 
+Informations communiquées par l'utilisateur le **7 novembre 2026** : base cible
+`amelone_prod`, utilisateur PostgreSQL `amelone`. La connexion, les droits et la
+version du serveur cible ne sont pas encore vérifiés. Le nom de l'utilisateur
+PostgreSQL ne confirme pas celui du compte SSH.
+
 ## 1. Choisir le compte et le coût avant la bascule
 
 Les [tarifs officiels Alwaysdata](https://help.alwaysdata.com/en/docs/admin-billing/billing/public-cloud-prices/)
@@ -49,6 +54,15 @@ sur `ssh-amelone.alwaysdata.net`, sans accès root. Déposer le code dans
 `/home/amelone/www/amelone` par SSH/SFTP ou cloner le dépôt avec un accès Git autorisé.
 Ne pas copier un `.env`, un dump ou les fichiers de travail du poste dans le dépôt.
 Adapter les chemins si le nom de compte confirmé dans le panneau diffère.
+
+Dans **Accès distant > SSH/SFTP**, relever le compte SSH et vérifier son activation.
+L'utilisateur peut aussi ouvrir le [terminal web](https://ssh-amelone.alwaysdata.net)
+et s'y authentifier lui-même, sans transmettre son mot de passe au chat. Pour une
+connexion directe depuis l'environnement Codex, prévoir séparément l'authentification
+SSH et l'autorisation réseau vers `ssh-amelone.alwaysdata.net`, port 22. Au contrôle
+du 7 novembre, aucun accès TCP à cette destination ni secret alwaysdata n'est
+configuré dans l'environnement ; aucun outil de modification de cette configuration
+n'y est disponible. Une clé publique ajoutée seule ne suffirait donc pas encore.
 
 Dans **Environnement > Python**, sélectionner aussi 3.12 pour les commandes SSH.
 Depuis SSH, dans le répertoire du projet :
