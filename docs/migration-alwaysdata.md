@@ -23,8 +23,13 @@ Elle n'a pas encore été utilisée pour se connecter. Empreinte publique :
 La session de terminal web de l'utilisateur confirme ensuite le clonage de
 `migration/alwaysdata` dans `/home/amelone/www/amelone`, Python **3.12.15** et
 le client `pg_dump (PostgreSQL) 18.4`. Cette dernière sortie décrit le client,
-pas le serveur PostgreSQL cible. La connexion à `amelone_prod`, la version du
-serveur, son chiffrement et l'absence de tables restent à vérifier avant import.
+pas le serveur PostgreSQL cible. La capture de la première vérification `psql`
+confirme ensuite l'accès à `amelone_prod`, le serveur **17.11**, une connexion
+**SSL/TLS 1.3** et **0 table publique**. Elle ne démontre pas une validation du
+certificat avec `sslmode=verify-full`. Une requête en lecture seule sur Render
+(`SHOW server_version;`, 7 novembre) reconfirme la source
+`18.6 (Debian 18.6-1.pgdg12+2)`. Mettre la cible en version 18 et refaire ces
+vérifications avant toute restauration ; aucun import n'a encore été effectué.
 
 ## 1. Choisir le compte et le coût avant la bascule
 
@@ -110,6 +115,19 @@ incluent PostgreSQL **18** : retenir cette version pour la source Render en 18.6
 Si le nouveau compte utilise encore 16 ou 17, passer par la migration PostgreSQL 18
 du panneau avant l'import, ou demander l'aide du support. Ne pas tenter une
 restauration de 18 vers 17 comme procédure habituelle.
+
+La cible constatée en 17.11 doit donc être mise à niveau depuis le compte
+`amelone` : **Avancé > Migrations > PostgreSQL 18**. L'
+[annonce officielle](https://changelog.alwaysdata.com/509/detail/) confirme ce
+chemin. Utiliser **Tester** si proposé, examiner son résultat, puis suivre le
+panneau pour lancer la migration et attendre sa fin. Cette opération concerne
+les bases PostgreSQL du compte ; Alwaysdata gère l'arrêt nécessaire. Une courte
+indisponibilité est possible. Le libellé précis du bouton d'exécution et un
+éventuel prix ne sont pas établis par la documentation consultée : ne pas
+promettre de surcoût nul. Voir la
+[procédure de migration](https://help.alwaysdata.com/fr/docs/caracteristiques-techniques/migrations/effectuer-une-migration/).
+Si l'entrée 18 n'apparaît pas, contacter le support. Refaire les contrôles
+ci-dessous après l'opération ; le numéro 18.4 du client ne prouve pas sa réussite.
 
 L'hôte habituel est `postgresql-amelone.alwaysdata.net`, port 5432 ; relever les
 valeurs exactes dans le panneau. Vérifier avec `SHOW server_version;` sur la cible
