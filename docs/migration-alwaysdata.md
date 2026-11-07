@@ -13,6 +13,13 @@ Informations communiquées par l'utilisateur le **7 novembre 2026** : base cible
 version du serveur cible ne sont pas encore vérifiés. Le nom de l'utilisateur
 PostgreSQL ne confirme pas celui du compte SSH.
 
+La capture fournie ensuite confirme un compte SSH **`amelone`**, un répertoire
+HOME **`/home/amelone/`** et une authentification par mot de passe active. Une clé
+Ed25519 dédiée à cette migration a été préparée dans un répertoire privé hors du
+dépôt ; sa partie publique est à ajouter dans Alwaysdata. Elle n'a pas encore été
+installée ni utilisée pour se connecter. Empreinte publique :
+`SHA256:+MNBVCz94JPTi/cuXbVxkz0+yQ7GuryUEF7O1IBkpN4`.
+
 ## 1. Choisir le compte et le coût avant la bascule
 
 Les [tarifs officiels Alwaysdata](https://help.alwaysdata.com/en/docs/admin-billing/billing/public-cloud-prices/)
@@ -56,6 +63,11 @@ Ne pas copier un `.env`, un dump ou les fichiers de travail du poste dans le dé
 Adapter les chemins si le nom de compte confirmé dans le panneau diffère.
 
 Dans **Accès distant > SSH/SFTP**, relever le compte SSH et vérifier son activation.
+Pour ajouter la clé publique préparée, utiliser l'icône **Clés SSH** à côté du
+compte `amelone`, puis **Ajouter une clé SSH**, selon la
+[procédure officielle](https://help.alwaysdata.com/en/docs/web-hosting/remote-access/ssh/use-keys/).
+Conserver les clés déjà présentes et retirer cette clé de migration lorsque son
+accès n'est plus nécessaire.
 L'utilisateur peut aussi ouvrir le [terminal web](https://ssh-amelone.alwaysdata.net)
 et s'y authentifier lui-même, sans transmettre son mot de passe au chat. Pour une
 connexion directe depuis l'environnement Codex, prévoir séparément l'authentification
