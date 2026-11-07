@@ -16,8 +16,8 @@ PostgreSQL ne confirme pas celui du compte SSH.
 La capture fournie ensuite confirme un compte SSH **`amelone`**, un répertoire
 HOME **`/home/amelone/`** et une authentification par mot de passe active. Une clé
 Ed25519 dédiée à cette migration a été préparée dans un répertoire privé hors du
-dépôt ; sa partie publique est à ajouter dans Alwaysdata. Elle n'a pas encore été
-installée ni utilisée pour se connecter. Empreinte publique :
+dépôt ; la capture suivante confirme l'ajout de sa partie publique dans Alwaysdata.
+Elle n'a pas encore été utilisée pour se connecter. Empreinte publique :
 `SHA256:+MNBVCz94JPTi/cuXbVxkz0+yQ7GuryUEF7O1IBkpN4`.
 
 ## 1. Choisir le compte et le coût avant la bascule
@@ -70,11 +70,15 @@ Conserver les clés déjà présentes et retirer cette clé de migration lorsque
 accès n'est plus nécessaire.
 L'utilisateur peut aussi ouvrir le [terminal web](https://ssh-amelone.alwaysdata.net)
 et s'y authentifier lui-même, sans transmettre son mot de passe au chat. Pour une
-connexion directe depuis l'environnement Codex, prévoir séparément l'authentification
-SSH et l'autorisation réseau vers `ssh-amelone.alwaysdata.net`, port 22. Au contrôle
-du 7 novembre, aucun accès TCP à cette destination ni secret alwaysdata n'est
-configuré dans l'environnement ; aucun outil de modification de cette configuration
-n'y est disponible. Une clé publique ajoutée seule ne suffirait donc pas encore.
+connexion directe depuis l'environnement Codex actuel, l'authentification SSH ne
+suffit pas : les services TCP nécessitent un chemin VPN/Tailscale IPv4, absent au
+contrôle du 7 novembre. Ajouter le domaine à une liste d'accès HTTP(S) ne rend pas
+le serveur SSH public joignable. L'indication antérieure d'une simple autorisation
+TCP 22 dans les paramètres était incomplète et est corrigée ici. Voir la
+[documentation Codex Cloud](https://learn.chatgpt.com/docs/environments/cloud-environments).
+Le chemin retenu en attendant un accès adapté est donc le terminal de l'utilisateur,
+ou le terminal web Alwaysdata ; aucune connexion réussie ni copie de données
+n'est encore établie.
 
 Dans **Environnement > Python**, sélectionner aussi 3.12 pour les commandes SSH.
 Depuis SSH, dans le répertoire du projet :
