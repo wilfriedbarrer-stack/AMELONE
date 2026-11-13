@@ -9,8 +9,11 @@ Aucun import, site WSGI opérationnel ni tâche planifiée cible n'est encore va
 **Contrôle du 13 novembre vers 14 h, heure de Paris :** Render indique toujours
 la source disponible, PostgreSQL **18.6**, taille **12 Mo**, avec une échéance
 **aujourd'hui à 16 h 16** (`2026-11-13T15:16:13.293253Z`). Sauvegarder la source
-avant de poursuivre le réglage de la cible. L'utilisateur est disponible au
-terminal. Aucune sauvegarde exécutée n'est encore confirmée.
+avant de poursuivre le réglage de la cible. La sortie du terminal confirme ensuite
+un export créé le **13 novembre à 14 h 43, heure de Paris**, sous
+`/home/amelone/private/backups/`, avec son fichier SHA-256 et une table des matières
+lisible. La restauration complète n'est pas encore confirmée. Le panneau cible
+communiqué par l'utilisateur indique toujours PostgreSQL **17**.
 
 La [documentation Render Free](https://render.com/docs/free#30-day-limit) précise
 qu'après expiration la base devient inaccessible, avec un délai de grâce de
@@ -228,12 +231,19 @@ majeure pour la répétition et l'export final.
 
 ## 4. Préparer l'environnement privé et le site WSGI
 
-Le générateur fournit une nouvelle clé Django et demande l'URL PostgreSQL cible
-avec une saisie masquée :
+Après passage de la cible en PostgreSQL 18, le générateur fournit une nouvelle
+clé Django et demande seulement le mot de passe PostgreSQL Alwaysdata, avec une
+saisie masquée. Il vérifie la version 18 et l'absence de tables publiques en
+lecture seule avant de créer le fichier :
 
 ```bash
-PYTHON_VERSION=3.12 python deploy/alwaysdata/init_env.py --host amelone.alwaysdata.net --output /home/amelone/private/amelone.env
+PYTHON_VERSION=3.12 python deploy/alwaysdata/init_env.py --host amelone.alwaysdata.net --output /home/amelone/private/amelone.env --db-host postgresql-amelone.alwaysdata.net --db-name amelone_prod --db-user amelone --check-db
 ```
+
+Si la base contient déjà des tables, arrêter et vérifier leur origine ; ne pas
+effacer ni importer de nouveau pour contourner ce refus. Aucun schéma ni compte
+n'est créé par cette vérification. Le mode historique de saisie d'URL reste
+disponible sans les trois options `--db-*` ni `--check-db`.
 
 Le fichier généré utilise le format POSIX `export NOM='valeur'` et doit rester en
 mode 600, hors du dépôt et hors des répertoires servis sur le Web. Le modèle
@@ -250,11 +260,17 @@ Dans **Web > Sites > Ajouter un site**, choisir :
 | Répertoire de travail | `/home/amelone/www/amelone` |
 | Version de Python | 3.12 |
 | Répertoire du virtualenv | `/home/amelone/venv/amelone` |
+| Variables d'environnement | `ALWAYSDATA_ENV_FILE=/home/amelone/private/amelone.env` |
 
-Recopier les mêmes couples nom/valeur du fichier privé dans le champ **Variables
-d'environnement du site**, sans `export` et sans les quotes de syntaxe shell. Le
-processus WSGI ne lit pas le fichier privé. Un `export` effectué dans une session
-SSH ne se propage pas au site. Les [sites Python](https://help.alwaysdata.com/en/docs/web-hosting/languages/python/configuration/)
+Le site WSGI lit ce fichier privé avant le chargement de Django. Aucune clé ni
+URL avec mot de passe n'a besoin d'être recopiée dans le panneau. Le chargeur
+vérifie le propriétaire du fichier, ses permissions, son emplacement hors Web et
+dépôt, son format et les seules variables autorisées. Il n'exécute aucun shell.
+Les valeurs du fichier remplacent les éventuelles anciennes variables héritées,
+pour éviter de reconnecter la cible à une ancienne base Render. Sans
+`ALWAYSDATA_ENV_FILE`, le comportement antérieur par variables du processus est
+conservé. Un `export` dans la session SSH ne se propage pas au site.
+Les [sites Python](https://help.alwaysdata.com/en/docs/web-hosting/languages/python/configuration/)
 utilisent uWSGI géré par Alwaysdata ; cette configuration ne lance pas Gunicorn.
 
 Les commandes Django doivent sélectionner `amelone.settings_alwaysdata` via
@@ -307,7 +323,7 @@ pg_restore --dbname='service=amelone_alwaysdata' --no-owner --no-privileges --ex
 Restaurer **uniquement dans la cible vide identifiée**, jamais dans la source. Ne
 pas utiliser `--clean` et ne pas rejouer un dump sur une cible déjà remplie. Pour
 une nouvelle répétition, créer une autre base vide et changer les connexions cible
-dans le fichier privé et le panneau. Conserver les dumps hors Git et hors Web ;
+dans le fichier privé, puis redémarrer le site. Conserver les dumps hors Git et hors Web ;
 ne publier ni contenu, ni identifiant de personne, ni adresse email.
 
 Comparer le SHA-256 du fichier avant et après transfert s'il change de machine.
@@ -378,6 +394,17 @@ Choisir une seule autorité d'envoi :
 Conserver la source silencieuse même si le service reste joignable. Le verrouillage
 en base n'empêche pas les doublons entre deux bases distinctes.
 
+Après la dernière copie utile, révoquer les anciens identifiants source s'ils ont
+été exposés. Dans Render, **Info > Credentials > New default credential** crée un
+nouvel accès ; l'ancien reste valide jusqu'à sa suppression explicite dans cette
+section. Pour l'utilisateur d'origine, Render retire la connexion en conservant
+ses objets. Si la source doit encore servir, mettre d'abord à jour ses clients,
+examiner la synchronisation du Blueprint `fromDatabase`, puis redéployer et
+vérifier avant de retirer l'ancien accès. Ne pas synchroniser à l'aveugle des
+changements d'infrastructure. Si la source est arrêtée après bascule, ne pas la
+rouvrir avec les anciens identifiants. Cette rotation ne prolonge pas l'échéance
+Free. [Documentation des identifiants Render](https://render.com/docs/postgresql-credentials)
+
 ## 8. Export final, contrôles et ouverture
 
 Pendant la fenêtre convenue, après arrêt des envois source :
@@ -387,12 +414,12 @@ Pendant la fenêtre convenue, après arrêt des envois source :
    répétition et un nom neuf ; relever son empreinte et les volumes métier.
 3. Le restaurer dans une **nouvelle base cible vide**, avec les mêmes options
    `pg_restore`, sans `--clean`. Mettre à jour `DATABASE_URL` dans le fichier privé
-   et dans les variables du site. Ne pas réutiliser les données des essais.
+   puis redémarrer le site. Ne pas réutiliser les données des essais.
 4. Déployer le commit validé, vérifier les migrations avec `migrate --check`, les
    volumes, les droits, les statiques et le fonctionnement HTTPS. Garder les trois
    indicateurs d'envoi à 0.
 5. Si l'adresse finale change, mettre à jour `ALWAYSDATA_SITE_HOST` dans le fichier
-   privé **et** dans le panneau, puis l'adresse du site et les DNS si applicables.
+   privé, puis l'adresse du site dans le panneau et les DNS si applicables.
    `SITE_URL` suit cet hôte ; vérifier les nouveaux liens d'inscription, de compte
    et d'email. Redémarrer le site et vérifier son certificat avant de l'annoncer.
 6. Décider de l'ouverture avec les contrôles de restauration réussis, puis ouvrir
@@ -405,8 +432,9 @@ de déplacer les adresses publiques.
 ## 9. Activer Brevo et les tâches une seule fois
 
 Après validation de la bascule et arrêt confirmé des traitements source/GitHub,
-renseigner la clé Brevo et l'expéditeur validé hors chat. Dans le fichier privé
-**et** dans le panneau du site, activer les trois indicateurs :
+renseigner la clé Brevo et l'expéditeur validé hors chat. Dans le fichier privé,
+activer les trois indicateurs (le panneau conserve seulement le chemin
+`ALWAYSDATA_ENV_FILE`) :
 
 ```bash
 export ALWAYSDATA_ENABLE_EMAILS='1'
@@ -497,9 +525,17 @@ absence de secret dans les arguments et sorties, fichiers et répertoire privés
 échappement du fichier de mots de passe PostgreSQL, refus d'écraser un export,
 nettoyage après échec de `pg_dump` ou `pg_restore --list` et collision lors de la
 publication, mode mot de passe seul avec encodage des caractères spéciaux et
-diagnostics sans secret pour EOF, annulation ou erreur technique. Les **25 tests**
-cumulés du kit passent ; Ruff et `git diff --check`
-passent également. Les programmes PostgreSQL sont simulés dans ces tests : une
-vraie connexion et une vraie sauvegarde depuis Alwaysdata restent à confirmer
-par le résultat du terminal de l'utilisateur. Aucun test de restauration complète
-n'est remplacé par la seule lecture de la table des matières de l'archive.
+diagnostics sans secret pour EOF, annulation ou erreur technique.
+
+Les vérifications du générateur cible couvrent aussi les trois paramètres publics
+de connexion, le mot de passe encodé, les arguments incomplets et le refus d'une
+cible en version 17 ou déjà remplie avant toute écriture. Le chargeur WSGI ajoute
+11 tests : lecture du fichier généré, valeurs littérales, propriétaire, permissions,
+symlinks, emplacement, taille, UTF-8, validation atomique et priorité du fichier.
+Les valeurs simples entre apostrophes sont acceptées pour les réglages manuels.
+Les **41 tests** cumulés du kit passent ; Ruff et `git diff --check` passent
+également. Les outils PostgreSQL sont simulés dans les tests. La sortie réelle du
+terminal utilisateur confirme désormais l'export privé et son fichier SHA-256 ;
+aucun test de restauration complète n'est remplacé par la seule lecture de la
+table des matières de l'archive. La configuration cible et le site WSGI restent à
+vérifier réellement après passage de PostgreSQL en version 18.

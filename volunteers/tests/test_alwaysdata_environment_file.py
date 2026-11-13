@@ -1,10 +1,15 @@
+import contextlib
 import importlib.util
+import io
+import os
 import shlex
 import stat
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import parse_qs, unquote, urlsplit
 
 SOURCE = Path(__file__).resolve().parents[2] / "deploy" / "alwaysdata" / "init_env.py"
 SPEC = importlib.util.spec_from_file_location("alwaysdata_init_env", SOURCE)
@@ -54,6 +59,8 @@ class AlwaysdataEnvironmentFileTests(unittest.TestCase):
         inside = INIT.PROJECT_ROOT / "private-test.env"
         with self.assertRaises(ValueError):
             INIT.create_environment("amelone.alwaysdata.net", inside, self.connection)
+        with self.assertRaises(ValueError):
+            INIT.create_environment("amelone.alwaysdata.net", "/home/amelone/www/private-test.env", self.connection)
         with self.assertRaises(ValueError) as error:
             INIT.create_environment("amelone.alwaysdata.net", self.path, "postgresql://PRIVATE:secret@host:BAD/db")
         self.assertNotIn("PRIVATE", str(error.exception))
@@ -69,6 +76,92 @@ class AlwaysdataEnvironmentFileTests(unittest.TestCase):
         rendered = str(output.call_args_list)
         self.assertNotIn("synthetic-secret", rendered)
         self.assertNotIn("PRIVATE-GENERATED-KEY", rendered)
+
+    def database_arguments(self):
+        return ["--host", "amelone.alwaysdata.net", "--output", str(self.path),
+                "--db-host", "postgresql-amelone.alwaysdata.net", "--db-name", "amelone_prod", "--db-user", "amelone"]
+
+    def test_database_fields_prompt_only_password_and_encode_credentials(self):
+        password = "PRIVATE:/\\@ ?%é"
+        with patch.object(INIT.getpass, "getpass", return_value=password) as prompt, \
+                patch.object(INIT, "create_environment", return_value=self.path) as create, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(INIT.main(self.database_arguments()), 0)
+        self.assertIn("Mot de passe", prompt.call_args.args[0])
+        connection = urlsplit(create.call_args.args[2])
+        self.assertEqual(unquote(connection.password), password)
+        self.assertEqual(connection.username, "amelone")
+        self.assertEqual(connection.hostname, "postgresql-amelone.alwaysdata.net")
+        self.assertEqual(connection.path, "/amelone_prod")
+        self.assertEqual(connection.port, 5432)
+        self.assertEqual(parse_qs(connection.query), {"sslmode": ["require"]})
+
+    def test_partial_database_fields_and_check_without_fields_fail_before_prompt(self):
+        base = ["--host", "amelone.alwaysdata.net", "--output", str(self.path)]
+        for fields in (["--db-host", "postgresql-amelone.alwaysdata.net"], ["--check-db"]):
+            with self.subTest(fields=fields), patch.object(INIT.getpass, "getpass") as prompt, \
+                    contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as result:
+                INIT.main(base + fields)
+            self.assertEqual(result.exception.code, 2)
+            prompt.assert_not_called()
+        self.assertFalse(self.path.exists())
+
+    def test_readonly_target_check_accepts_only_empty_postgresql18_before_writing(self):
+        password = "PRIVATE:pass\\word"
+        password_files = []
+        def psql(arguments, **kwargs):
+            self.assertEqual(arguments[0], "psql")
+            self.assertEqual(arguments.count("-c"), 2)
+            self.assertTrue(all(arguments[index + 1].startswith("SELECT ") for index, argument in enumerate(arguments) if argument == "-c"))
+            self.assertFalse(any("PRIVATE" in argument for argument in arguments))
+            environment = kwargs["env"]
+            self.assertFalse(any("PRIVATE" in value for value in environment.values()))
+            for key in ("PGPASSWORD", "PGSERVICE", "PGSERVICEFILE", "DATABASE_URL"):
+                self.assertNotIn(key, environment)
+            self.assertEqual(environment["PGSSLMODE"], "require")
+            self.assertEqual(environment["PGCONNECT_TIMEOUT"], "20")
+            self.assertEqual(kwargs["timeout"], 60)
+            password_file = Path(environment["PGPASSFILE"])
+            password_files.append(password_file)
+            self.assertEqual(stat.S_IMODE(password_file.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(password_file.parent.stat().st_mode), 0o700)
+            self.assertEqual(password_file.read_text(), "postgresql-amelone.alwaysdata.net:5432:amelone_prod:amelone:PRIVATE\\:pass\\\\word\n")
+            self.assertFalse(self.path.exists())
+            return subprocess.CompletedProcess(arguments, 0, b"180006\n0\n", b"PRIVATE raw output")
+        output, errors = io.StringIO(), io.StringIO()
+        with patch.dict(os.environ, {"PGPASSWORD": "PRIVATE inherited", "DATABASE_URL": "PRIVATE inherited"}, clear=True), \
+                patch.object(INIT.getpass, "getpass", return_value=password), \
+                patch.object(INIT.subprocess, "run", side_effect=psql), \
+                contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+            self.assertEqual(INIT.main(self.database_arguments() + ["--check-db"]), 0)
+        self.assertTrue(self.path.exists())
+        self.assertFalse(any(path.exists() for path in password_files))
+        self.assertNotIn("PRIVATE", output.getvalue() + errors.getvalue())
+
+    def test_target17_nonempty_and_invalid_output_never_write_configuration(self):
+        for stdout, diagnostic in ((b"170009\n0\n", "PostgreSQL 18 requis"),
+                                   (b"180006\n1\n", "doit être vide"), (b"PRIVATE\n", "deux nombres")):
+            output, errors = io.StringIO(), io.StringIO()
+            with self.subTest(kind=diagnostic), patch.object(INIT.getpass, "getpass", return_value="PRIVATE"), \
+                    patch.object(INIT.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout, b"PRIVATE")), \
+                    contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                self.assertEqual(INIT.main(self.database_arguments() + ["--check-db"]), 1)
+            self.assertFalse(self.path.exists())
+            self.assertIn(diagnostic, errors.getvalue())
+            self.assertNotIn("PRIVATE", output.getvalue() + errors.getvalue())
+
+    def test_safe_input_errors_never_display_exception_text(self):
+        for exception, diagnostic in ((EOFError("PRIVATE"), "EOF"),
+                                      (KeyboardInterrupt("PRIVATE"), "Saisie annulée"),
+                                      (INIT.getpass.GetPassWarning("PRIVATE"), "Saisie masquée indisponible"),
+                                      (PermissionError(13, "PRIVATE"), "PermissionError, errno=13")):
+            output, errors = io.StringIO(), io.StringIO()
+            with self.subTest(error_type=type(exception).__name__), \
+                    patch.object(INIT.getpass, "getpass", side_effect=exception), \
+                    contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                self.assertEqual(INIT.main(self.database_arguments()), 1)
+            self.assertIn(diagnostic, errors.getvalue())
+            self.assertNotIn("PRIVATE", output.getvalue() + errors.getvalue())
 
 
 if __name__ == "__main__":
