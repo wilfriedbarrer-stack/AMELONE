@@ -153,3 +153,34 @@ class RenderBackupTests(unittest.TestCase):
             with self.assertRaisesRegex(backup.BackupError, "majeure 18"):
                 backup.create_backup(SOURCE_URL, self.output)
         self.assertEqual(list(self.output.iterdir()), [])
+
+    def test_password_only_uses_fixed_source_and_encodes_special_password_characters(self):
+        password = "PRIVATE:/\\@ ?%é"
+        output, errors = io.StringIO(), io.StringIO()
+        with patch.object(backup.getpass, "getpass", return_value=password) as prompt, \
+                patch.object(backup, "create_backup", return_value=(self.output / "sample.dump", self.output / "sample.dump.sha256")) as create, \
+                contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+            self.assertEqual(backup.main(["--password-only", "--output-dir", str(self.output)]), 0)
+        self.assertIn("Mot de passe", prompt.call_args.args[0])
+        source = backup.parse_source(create.call_args.args[0])
+        self.assertEqual(source[:4], (backup.SOURCE_HOST, "5432", "amelone", "amelone"))
+        self.assertEqual(source[4], password)
+        self.assertNotIn("PRIVATE", output.getvalue() + errors.getvalue())
+
+    def test_input_failures_and_unexpected_errors_show_only_safe_diagnostics(self):
+        for exception, diagnostic in (
+            (EOFError("PRIVATE"), "Saisie terminée sans valeur (EOF)"),
+            (KeyboardInterrupt("PRIVATE"), "Saisie annulée"),
+            (backup.getpass.GetPassWarning("PRIVATE"), "Saisie masquée indisponible"),
+            (PermissionError(13, "PRIVATE", "/PRIVATE/path"), "PermissionError, errno=13"),
+            (RuntimeError("PRIVATE"), "RuntimeError"),
+        ):
+            output, errors = io.StringIO(), io.StringIO()
+            with self.subTest(error_type=type(exception).__name__), \
+                    patch.object(backup.getpass, "getpass", side_effect=exception), \
+                    patch.object(backup, "create_backup") as create, \
+                    contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                self.assertEqual(backup.main(["--password-only"]), 1)
+            create.assert_not_called()
+            self.assertIn(diagnostic, errors.getvalue())
+            self.assertNotIn("PRIVATE", output.getvalue() + errors.getvalue())

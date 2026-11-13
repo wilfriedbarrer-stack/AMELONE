@@ -14,9 +14,11 @@ import tempfile
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 SOURCE_HOST = "dpg-db7ppf5g1s2s73bdoc20-a.oregon-postgres.render.com"
+SOURCE_USER = "amelone"
+SOURCE_DATABASE = "amelone"
 DEFAULT_OUTPUT_DIR = Path("/home/amelone/private/backups")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -152,18 +154,40 @@ class SafeArgumentParser(argparse.ArgumentParser):
 def main(argv=None):
     parser = SafeArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Répertoire privé absolu hors du dépôt")
+    parser.add_argument("--password-only", action="store_true", help="Demander seulement le mot de passe de la base Render connue")
     arguments = parser.parse_args(argv)
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", getpass.GetPassWarning)
-            source_url = getpass.getpass("URL externe Render (saisie masquée) : ")
+            if arguments.password_only:
+                password = getpass.getpass("Mot de passe PostgreSQL Render (saisie masquée) : ")
+                if not password:
+                    raise BackupError("Mot de passe vide : relancer puis saisir la valeur à l’invite masquée.")
+                source_url = (
+                    f"postgresql://{quote(SOURCE_USER, safe='')}:{quote(password, safe='')}"
+                    f"@{SOURCE_HOST}/{quote(SOURCE_DATABASE, safe='')}"
+                )
+            else:
+                source_url = getpass.getpass("URL externe Render (saisie masquée) : ")
         dump, checksum = create_backup(source_url, arguments.output_dir)
     except BackupError as error:
         print(f"Erreur : {error}", file=sys.stderr)
         return 1
-    except (Exception, KeyboardInterrupt):
-        # Never print parser errors, child output, tracebacks, or credentials.
-        print("Sauvegarde interrompue ou impossible ; aucun détail sensible affiché.", file=sys.stderr)
+    except EOFError:
+        print("Saisie terminée sans valeur (EOF) ; relancer dans un terminal interactif.", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        print("Saisie annulée.", file=sys.stderr)
+        return 1
+    except getpass.GetPassWarning:
+        print("Saisie masquée indisponible ; utiliser un terminal interactif.", file=sys.stderr)
+        return 1
+    except Exception as error:
+        # Only the type and a numeric errno are safe; never print exception text.
+        code = type(error).__name__
+        if isinstance(getattr(error, "errno", None), int):
+            code += f", errno={error.errno}"
+        print(f"Erreur technique ({code}) ; aucun détail sensible affiché.", file=sys.stderr)
         return 1
     print(f"Export créé (table des matières lisible) : {dump}\nSHA-256 : {checksum}")
     return 0

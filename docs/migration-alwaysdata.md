@@ -43,19 +43,26 @@ vérifications avant toute restauration ; aucun import n'a encore été effectu�
 ### Sauvegarde prioritaire du 13 novembre
 
 Ouvrir la [base Render](https://dashboard.render.com/d/dpg-db7ppf5g1s2s73bdoc20-a),
-puis copier son **External Database URL** depuis les informations de connexion.
-Cette URL contient le mot de passe : la saisir uniquement dans l'invite masquée
-du script ci-dessous, jamais dans le chat, une capture ou la ligne de commande.
+puis copier uniquement son **mot de passe PostgreSQL** depuis les informations
+de connexion. Le script connaît l'hôte externe, le nom de base et l'utilisateur
+confirmés dans les métadonnées Render. Saisir la valeur uniquement dans son
+invite masquée, jamais dans le chat, une capture ou la ligne de commande.
 
 Depuis le terminal web Alwaysdata, après remise en état du collage si nécessaire :
 
 ```bash
 cd /home/amelone/www/amelone
 git pull --ff-only
-PYTHON_VERSION=3.12 python deploy/alwaysdata/backup_render.py
+PYTHON_VERSION=3.12 python deploy/alwaysdata/backup_render.py --password-only
 ```
 
-Ne coller aucune commande après celle qui demande l'URL. Le script prépare un
+Attendre le libellé **Mot de passe PostgreSQL Render (saisie masquée)** avant de
+coller le mot de passe avec Ctrl+Maj+V, puis Entrée. Si le shell affiche déjà son
+invite `amelone@ssh2:…$`, le script n'attend plus de secret : relancer la commande
+et examiner le diagnostic. Ne coller aucune commande après celle qui demande le
+mot de passe. Le mode historique de saisie d'URL complète reste disponible sans
+`--password-only`, mais cette procédure simplifiée évite la confusion entre URL
+interne et externe. Le script prépare un
 export PostgreSQL au format personnalisé dans `/home/amelone/private/backups`,
 vérifie sa table des matières avec `pg_restore --list` et calcule son SHA-256.
 Les fichiers restent privés, hors du dépôt et du Web. L'export ne restaure rien
@@ -64,8 +71,14 @@ complète est réussie et ne bloque pas les écritures Render ; prévoir le dump
 dans la fenêtre de bascule décrite plus bas.
 
 En cas de marqueurs parasites `^[[200~` dans le terminal web, interrompre avec
-Ctrl+C, taper manuellement `reset` puis Entrée et réessayer le bloc. Ne jamais
-partager une capture qui contiendrait une URL de connexion ou une saisie secrète.
+Ctrl+C, taper manuellement `cd ~/www/amelone` puis Entrée. Coller ensuite avec
+**Ctrl+Maj+V** ou le menu **Coller** du navigateur, une commande à la fois. Le
+raccourci Ctrl+V peut être transmis à Readline comme insertion littérale et produire
+ces marqueurs ; `reset` seul n'a pas corrigé le cas observé. Ne jamais partager une
+capture qui contiendrait une URL de connexion ou une saisie secrète. Une valeur
+déjà envoyée dans le chat ou saisie comme commande est à considérer exposée et
+doit être renouvelée, puis retirée de l'historique du terminal ; ne jamais publier
+sa valeur dans le journal de migration.
 
 ## 1. Choisir le compte et le coût avant la bascule
 
@@ -479,11 +492,13 @@ Alwaysdata. L'audit de sécurité commencé séparément n'est pas déclaré ter
 
 ### Vérifications supplémentaires du 13 novembre
 
-Le script de sauvegarde ajoute 8 tests : URL et source attendues, saisie masquée,
+Le script de sauvegarde ajoute 10 tests : URL et source attendues, saisie masquée,
 absence de secret dans les arguments et sorties, fichiers et répertoire privés,
 échappement du fichier de mots de passe PostgreSQL, refus d'écraser un export,
 nettoyage après échec de `pg_dump` ou `pg_restore --list` et collision lors de la
-publication. Les **23 tests** cumulés du kit passent ; Ruff et `git diff --check`
+publication, mode mot de passe seul avec encodage des caractères spéciaux et
+diagnostics sans secret pour EOF, annulation ou erreur technique. Les **25 tests**
+cumulés du kit passent ; Ruff et `git diff --check`
 passent également. Les programmes PostgreSQL sont simulés dans ces tests : une
 vraie connexion et une vraie sauvegarde depuis Alwaysdata restent à confirmer
 par le résultat du terminal de l'utilisateur. Aucun test de restauration complète
