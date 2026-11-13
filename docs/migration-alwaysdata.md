@@ -1,12 +1,21 @@
 # Préparer puis transférer AMELONE vers Alwaysdata
 
 Ce guide accompagne la branche `migration/alwaysdata`. Il prépare une migration ; il
-ne constitue pas la preuve d'un déploiement réussi. L'utilisateur a créé le compte
-et fourni l'adresse **https://amelone.alwaysdata.net**. Aucun accès SSH/API n'est
-encore configuré ici ; aucune base cible ni tâche planifiée n'a été créée pendant
-cette préparation. Aucune donnée de production n'a été copiée. La base Render a une échéance constatée
-au **13 novembre 2026** lors du contrôle du 6 novembre : effectuer la sauvegarde et
-la répétition avant cette date, puis revérifier l'échéance dans Render.
+ne constitue pas la preuve d'un déploiement réussi. L'utilisateur a créé le compte,
+la base cible et l'accès SSH sur **https://amelone.alwaysdata.net** ; la connexion
+directe depuis Codex reste indisponible. Il utilise le terminal web Alwaysdata.
+Aucun import, site WSGI opérationnel ni tâche planifiée cible n'est encore validé.
+
+**Contrôle du 13 novembre vers 14 h, heure de Paris :** Render indique toujours
+la source disponible, PostgreSQL **18.6**, taille **12 Mo**, avec une échéance
+**aujourd'hui à 16 h 16** (`2026-11-13T15:16:13.293253Z`). Sauvegarder la source
+avant de poursuivre le réglage de la cible. L'utilisateur est disponible au
+terminal. Aucune sauvegarde exécutée n'est encore confirmée.
+
+La [documentation Render Free](https://render.com/docs/free#30-day-limit) précise
+qu'après expiration la base devient inaccessible, avec un délai de grâce de
+14 jours pour passer à une offre payante avant suppression ; aucun changement
+d'offre n'est autorisé par ce guide.
 
 Informations communiquées par l'utilisateur le **7 novembre 2026** : base cible
 `amelone_prod`, utilisateur PostgreSQL `amelone`. La connexion, les droits et la
@@ -30,6 +39,33 @@ certificat avec `sslmode=verify-full`. Une requête en lecture seule sur Render
 (`SHOW server_version;`, 7 novembre) reconfirme la source
 `18.6 (Debian 18.6-1.pgdg12+2)`. Mettre la cible en version 18 et refaire ces
 vérifications avant toute restauration ; aucun import n'a encore été effectué.
+
+### Sauvegarde prioritaire du 13 novembre
+
+Ouvrir la [base Render](https://dashboard.render.com/d/dpg-db7ppf5g1s2s73bdoc20-a),
+puis copier son **External Database URL** depuis les informations de connexion.
+Cette URL contient le mot de passe : la saisir uniquement dans l'invite masquée
+du script ci-dessous, jamais dans le chat, une capture ou la ligne de commande.
+
+Depuis le terminal web Alwaysdata, après remise en état du collage si nécessaire :
+
+```bash
+cd /home/amelone/www/amelone
+git pull --ff-only
+PYTHON_VERSION=3.12 python deploy/alwaysdata/backup_render.py
+```
+
+Ne coller aucune commande après celle qui demande l'URL. Le script prépare un
+export PostgreSQL au format personnalisé dans `/home/amelone/private/backups`,
+vérifie sa table des matières avec `pg_restore --list` et calcule son SHA-256.
+Les fichiers restent privés, hors du dépôt et du Web. L'export ne restaure rien
+et ne modifie pas les données source. Il ne prouve pas encore qu'une restauration
+complète est réussie et ne bloque pas les écritures Render ; prévoir le dump final
+dans la fenêtre de bascule décrite plus bas.
+
+En cas de marqueurs parasites `^[[200~` dans le terminal web, interrompre avec
+Ctrl+C, taper manuellement `reset` puis Entrée et réessayer le bloc. Ne jamais
+partager une capture qui contiendrait une URL de connexion ou une saisie secrète.
 
 ## 1. Choisir le compte et le coût avant la bascule
 
@@ -440,3 +476,15 @@ empreintes dans `requirements.txt`. L'installation cible vérifie ces empreintes
 Cette préparation ne comprend pas une nouvelle sortie `pip-audit`, une
 restauration réelle, une vérification de quota ou un test d'envoi Brevo sur
 Alwaysdata. L'audit de sécurité commencé séparément n'est pas déclaré terminé.
+
+### Vérifications supplémentaires du 13 novembre
+
+Le script de sauvegarde ajoute 8 tests : URL et source attendues, saisie masquée,
+absence de secret dans les arguments et sorties, fichiers et répertoire privés,
+échappement du fichier de mots de passe PostgreSQL, refus d'écraser un export,
+nettoyage après échec de `pg_dump` ou `pg_restore --list` et collision lors de la
+publication. Les **23 tests** cumulés du kit passent ; Ruff et `git diff --check`
+passent également. Les programmes PostgreSQL sont simulés dans ces tests : une
+vraie connexion et une vraie sauvegarde depuis Alwaysdata restent à confirmer
+par le résultat du terminal de l'utilisateur. Aucun test de restauration complète
+n'est remplacé par la seule lecture de la table des matières de l'archive.
