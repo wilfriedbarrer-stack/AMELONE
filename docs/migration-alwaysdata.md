@@ -4,7 +4,9 @@ Ce guide accompagne la branche `migration/alwaysdata`. Il prépare une migration
 ne constitue pas la preuve d'un déploiement réussi. L'utilisateur a créé le compte,
 la base cible et l'accès SSH sur **https://amelone.alwaysdata.net** ; la connexion
 directe depuis Codex reste indisponible. Il utilise le terminal web Alwaysdata.
-Aucun import, site WSGI opérationnel ni tâche planifiée cible n'est encore validé.
+La configuration privée, l'installation et l'import cible sont maintenant
+confirmés par le terminal de l'utilisateur. Le site WSGI et les tâches cibles
+restent à configurer et vérifier.
 
 **Contrôle du 13 novembre vers 14 h, heure de Paris :** Render indique toujours
 la source disponible, PostgreSQL **18.6**, taille **12 Mo**, avec une échéance
@@ -12,7 +14,8 @@ la source disponible, PostgreSQL **18.6**, taille **12 Mo**, avec une échéance
 avant de poursuivre le réglage de la cible. La sortie du terminal confirme ensuite
 un export créé le **13 novembre à 14 h 43, heure de Paris**, sous
 `/home/amelone/private/backups/`, avec son fichier SHA-256 et une table des matières
-lisible. La restauration complète n'est pas encore confirmée.
+lisible. Le 14 novembre, le terminal confirme ensuite la restauration :
+**32 tables publiques et 31 migrations Django**, avec les envois désactivés.
 
 **Contrôle du 14 novembre vers 10 h 20, heure de Paris :** Render répond
 `status=suspended`, `suspended=suspended`, `suspenders=[billing]`. Aucun export
@@ -20,8 +23,12 @@ plus récent n'a été obtenu ; aucun paiement ni
 changement d'offre n'a été effectué. Les éventuelles modifications entre l'export
 du 13 novembre à 14 h 43 et l'arrêt de la source ne sont pas garanties dans la
 copie disponible. La capture Alwaysdata confirme une migration native réussie le
-14 novembre à 10 h 17 ; la version 18 et la base vide seront reconfirmées par
-`init_env.py --check-db` avant création du fichier privé.
+14 novembre à 10 h 17. `init_env.py --check-db` réussit ensuite : version 18,
+connexion TLS exigée et cible vide avant création du fichier privé. L'installation
+copie 132 fichiers statiques et `check --deploy` ne signale que **security.W005**
+et **security.W021**, correspondant aux options HSTS sous-domaines/préchargement
+laissées désactivées. Ce résultat ne prouve pas encore le fonctionnement HTTPS
+du site WSGI, ni les parcours de connexion et d'administration.
 
 La [documentation Render Free](https://render.com/docs/free#30-day-limit) précise
 qu'après expiration la base devient inaccessible, avec un délai de grâce de
@@ -258,7 +265,8 @@ mode 600, hors du dépôt et hors des répertoires servis sur le Web. Le modèle
 `deploy/alwaysdata/environment.example` montre les variables attendues. Il contient
 des valeurs fictives et ne doit pas être déployé tel quel.
 
-Dans **Web > Sites > Ajouter un site**, choisir :
+Dans **Web > Sites**, modifier le site qui utilise déjà `amelone.alwaysdata.net`.
+Si aucun site n'utilise cette adresse, choisir **Ajouter un site**. Renseigner :
 
 | Champ | Valeur |
 | --- | --- |
@@ -566,8 +574,8 @@ Les **41 tests** cumulés du kit passent ; Ruff et `git diff --check` passent
 également. Les outils PostgreSQL sont simulés dans les tests. La sortie réelle du
 terminal utilisateur confirme désormais l'export privé et son fichier SHA-256 ;
 aucun test de restauration complète n'est remplacé par la seule lecture de la
-table des matières de l'archive. La configuration cible et le site WSGI restent à
-vérifier réellement après passage de PostgreSQL en version 18.
+table des matières de l'archive. Les résultats réels obtenus ensuite sont consignés
+ci-dessous ; le site WSGI et les parcours restent à vérifier.
 
 ### Préparation de la restauration du 14 novembre
 
@@ -576,4 +584,13 @@ imposés, indicateurs d'envoi à 0, fichiers privés, checksum, refus d'une base
 remplie ou PostgreSQL 17, arguments transactionnels, absence de secret dans les
 sorties et nettoyage des identifiants temporaires. Les **51 tests** du kit,
 Ruff et `git diff --check` passent. Les programmes PostgreSQL restent simulés dans
-ces tests ; aucun import réel n'est encore attesté par un résultat utilisateur.
+ces tests. La sortie réelle fournie par l'utilisateur confirme ensuite :
+
+```text
+Archive et cible vérifiées. Restauration Alwaysdata en cours ; patienter.
+Restauration terminée : 32 tables publiques, 31 migrations Django. Envois désactivés.
+```
+
+Ce contrôle atteste la réussite de la commande et ses compteurs finaux. Il ne
+remplace pas encore la comparaison détaillée des données, `migrate --check`, la
+réponse HTTPS de `/sante/`, les tests de connexion et les parcours métier.
