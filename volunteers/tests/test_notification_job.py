@@ -252,9 +252,9 @@ class NotificationWorkflowTests(SimpleTestCase):
         self.assertIn('result.get("attempted", 0) == 0', source)
         self.assertIn('time.monotonic() - refreshed_at >= 120', source)
 
-    def test_http_failures_distinguish_github_identity_and_render_processing_without_error_details(self):
+    def test_http_failures_distinguish_github_identity_and_application_processing_without_error_details(self):
         _, source = self.workflow_source()
-        for phase in ("identité GitHub", "traitement Render"):
+        for phase in ("identité GitHub", "traitement Alwaysdata"):
             with self.subTest(phase=phase):
                 opener = MagicMock()
                 failure = HTTPError("https://example.test", 401, "private provider detail", {}, None)
@@ -272,5 +272,7 @@ class NotificationWorkflowTests(SimpleTestCase):
                     exec(compile(source, "event-notifications.yml inline Python", "exec"), {})
                 self.assertEqual(error.exception.code, 1)
                 self.assertIn("Interruption pendant " + phase + " (HTTP 401)", output.getvalue())
+                if phase == "traitement Alwaysdata":
+                    self.assertEqual(opener.open.call_args.args[0].full_url, "https://amelone.alwaysdata.net/notifications/traiter/")
                 self.assertNotIn("private provider detail", output.getvalue())
                 self.assertNotIn("test-only-runtime-token", output.getvalue())
