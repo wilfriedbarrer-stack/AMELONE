@@ -5,8 +5,10 @@ ne constitue pas la preuve d'un déploiement réussi. L'utilisateur a créé le 
 la base cible et l'accès SSH sur **https://amelone.alwaysdata.net** ; la connexion
 directe depuis Codex reste indisponible. Il utilise le terminal web Alwaysdata.
 La configuration privée, l'installation et l'import cible sont maintenant
-confirmés par le terminal de l'utilisateur. Le site WSGI et les tâches cibles
-restent à configurer et vérifier.
+confirmés par le terminal de l'utilisateur. Le site WSGI, sa réponse HTTPS et la
+connexion du propriétaire sont désormais confirmés ; le contrôle des migrations,
+les autres parcours métier et la remise en service des notifications restent à
+vérifier.
 
 **Contrôle du 13 novembre vers 14 h, heure de Paris :** Render indique toujours
 la source disponible, PostgreSQL **18.6**, taille **12 Mo**, avec une échéance
@@ -36,8 +38,8 @@ qu'après expiration la base devient inaccessible, avec un délai de grâce de
 d'offre n'est autorisé par ce guide.
 
 Informations communiquées par l'utilisateur le **7 novembre 2026** : base cible
-`amelone_prod`, utilisateur PostgreSQL `amelone`. La connexion, les droits et la
-version du serveur cible ne sont pas encore vérifiés. Le nom de l'utilisateur
+`amelone_prod`, utilisateur PostgreSQL `amelone`. À cette date, la connexion, les droits et la
+version du serveur cible n'étaient pas encore vérifiés. Le nom de l'utilisateur
 PostgreSQL ne confirme pas celui du compte SSH.
 
 La capture fournie ensuite confirme un compte SSH **`amelone`**, un répertoire
@@ -278,6 +280,13 @@ Si aucun site n'utilise cette adresse, choisir **Ajouter un site**. Renseigner :
 | Répertoire du virtualenv | `/home/amelone/venv/amelone` |
 | Variables d'environnement | `ALWAYSDATA_ENV_FILE=/home/amelone/private/amelone.env` |
 
+Les champs de chemins du panneau affichent déjà le préfixe `/home/amelone/`.
+Dans leur partie éditable, saisir seulement `www/amelone/deploy/alwaysdata/amelone.wsgi.py`,
+`www/amelone` et `venv/amelone`, respectivement. La variable d'environnement garde
+son chemin absolu complet. Un doublon observé du répertoire de travail a produit
+`chdir() to /home/amelone/home/amelone/www/amelone` ; sa correction et le redémarrage
+ont permis la réponse de santé confirmée plus bas.
+
 Le site WSGI lit ce fichier privé avant le chargement de Django. Aucune clé ni
 URL avec mot de passe n'a besoin d'être recopiée dans le panneau. Le chargeur
 vérifie le propriétaire du fichier, ses permissions, son emplacement hors Web et
@@ -423,10 +432,21 @@ Choisir une seule autorité d'envoi :
 
 1. Désactiver les campagnes automatiques et les envois sur la **source Render**.
 2. Désactiver le workflow GitHub **Notifications des événements**, fichier
-   `.github/workflows/event-notifications.yml`, via GitHub Actions. Il appelle
-   actuellement l'URL Render toutes les 15 minutes. Vérifier qu'aucune exécution
-   n'est encore en cours.
-3. Ne pas créer ni activer de tâche de traitement sur Alwaysdata avant ces arrêts.
+   `.github/workflows/event-notifications.yml`, via GitHub Actions. Tant que le
+   changement de cette branche n'a pas atteint `main`, il appelle toujours l'URL
+   Render toutes les 15 minutes. Vérifier qu'aucune exécution n'est encore en cours.
+3. Empêcher un nouveau build du service source Render lors de la fusion :
+   désactiver son auto-déploiement dans le panneau, ou utiliser le marqueur
+   **`[skip render]`** dans le titre du commit de squash. Ce marqueur est
+   [officiellement pris en charge](https://render.com/docs/deploys#skipping-an-auto-deploy)
+   pour ignorer cet auto-déploiement ; il ne désactive pas les suivants ou les
+   déploiements manuels. Il ne constitue pas une garantie sur un Blueprint
+   modifié. Ici, `render.yaml` est identique au `main` distant vérifié
+   (`0e54f791`) : aucun changement d'infrastructure Render n'est préparé. Aucune
+   mise à niveau payante n'est demandée.
+4. Conserver GitHub comme unique planificateur des notifications ; ne pas créer
+   de tâche de notification concurrente dans Alwaysdata. La section 9 décrit la
+   reprise sur le nouvel hôte avec les envois encore désactivés.
 
 Conserver la source silencieuse même si le service reste joignable. Le verrouillage
 en base n'empêche pas les doublons entre deux bases distinctes.
@@ -466,12 +486,69 @@ La [procédure officielle de transfert](https://help.alwaysdata.com/en/docs/web-
 recommande également de configurer une adresse de préproduction et de tester avant
 de déplacer les adresses publiques.
 
-## 9. Activer Brevo et les tâches une seule fois
+## 9. Conserver GitHub gratuit et reprendre les emails après vérification
 
-Après validation de la bascule et arrêt confirmé des traitements source/GitHub,
-renseigner la clé Brevo et l'expéditeur validé hors chat. Dans le fichier privé,
-activer les trois indicateurs (le panneau conserve seulement le chemin
-`ALWAYSDATA_ENV_FILE`) :
+Le choix de l'utilisateur reste **GitHub Actions gratuit, toutes les 15 minutes**,
+avec des retards possibles. Le workflow existant conserve son horaire
+`7,22,37,52 * * * *`, les permissions OIDC, la restriction à `main`, la vérification
+de ses claims côté serveur et ses limites de traitement. Seules l'URL appelée et
+la désignation de l'hébergeur changent :
+`https://amelone.alwaysdata.net/notifications/traiter/`.
+
+Ce changement doit être fusionné dans **`main`** avant que le planificateur utilise
+Alwaysdata. Un changement uniquement dans la branche de migration ou un `git pull`
+sur le site ne redirige pas le workflow planifié. L'arrêt du traitement source et
+la prévention de l'auto-déploiement, décrits en section 7, précèdent cette fusion. Ne pas ajouter
+de tâche de notification dans Alwaysdata et ne pas modifier les paramètres OIDC
+dans le fichier privé : ils restent ceux des settings existants.
+
+**Conserver les quatre indicateurs d'envoi à 0** pendant les contrôles. L'archive
+disponible date du **13 novembre à 14 h 43, heure de Paris** ; la source a pu
+continuer à fonctionner jusqu'à son échéance à 16 h 16. Des envois effectués après
+l'export peuvent ne pas figurer dans l'historique restauré. Le verrouillage en
+base ne couvre pas deux copies distinctes ; ne pas traiter automatiquement la
+file importée avant rapprochement avec l'historique Brevo et les informations
+encore récupérables sur la source. Examiner en particulier les états en attente,
+les résultats incertains et les campagnes arrivées à échéance. Ne pas effacer les
+états ni réinitialiser l'historique pour forcer une reprise.
+
+Après arrivée du workflow dans `main`, une exécution manuelle sur `main`, avec les
+indicateurs toujours à 0, doit obtenir **`enabled=false` et `attempted=0`** sur
+l'endpoint Alwaysdata. Cela vérifie le transport et l'identité OIDC sans demander
+d'envoi ; cette exécution reste à réaliser. Faire séparément un contrôle Brevo
+**en lecture seule par GET** du compte et de l'expéditeur validé, avec la clé
+configurée hors chat, et examiner les volumes avec
+`process_event_notifications --dry-run --limit 100`. La présence d'une clé ou un
+résultat OIDC positif ne prouve pas à elle seule que Brevo autorise l'envoi.
+
+Pour configurer une nouvelle clé sans la partager dans le chat, utiliser le
+Python du virtualenv et le helper privé :
+
+```bash
+/home/amelone/venv/amelone/bin/python deploy/alwaysdata/configure_brevo.py
+```
+
+Coller la clé **une seule fois dans l'invite masquée**, puis attendre. Le helper
+la conserve dans le fichier privé en mode 600, sans remplacer `DATABASE_URL` ou
+la clé Django, et laisse les quatre interrupteurs d'envoi à 0. Il appelle les
+diagnostics GET existants ; aucune requête sandbox ou envoi réel n'est effectué.
+En cas de refus lié à l'adresse IP, la clé reste privée pour permettre un nouvel
+essai sans nouvelle saisie :
+
+```bash
+/home/amelone/venv/amelone/bin/python deploy/alwaysdata/configure_brevo.py --check
+```
+
+Après confirmation du fournisseur, `--enable-email` peut activer les seuls emails
+transactionnels ; les notifications d'événements et les SMS restent désactivés.
+Redémarrer WSGI après un changement pour que le processus recharge ce fichier.
+Ne pas confondre un diagnostic prêt depuis SSH avec une livraison effective
+depuis le processus web ; vérifier le fonctionnement avant d'annoncer les emails
+actifs.
+
+Après validation de la bascule, du fournisseur et du rapprochement de la file,
+activer explicitement les trois indicateurs dans le fichier privé (le panneau
+conserve seulement le chemin `ALWAYSDATA_ENV_FILE`) :
 
 ```bash
 export ALWAYSDATA_ENABLE_EMAILS='1'
@@ -481,24 +558,16 @@ export EMAIL_PROVIDER='brevo'
 export SMS_ENABLED='0'
 ```
 
-Redémarrer le site. Vérifier les volumes en attente avec `--dry-run` et contrôler
-les campagnes importées avant le premier traitement réel. Ne pas effacer leurs
-états ni réinitialiser l'historique pour forcer un envoi. Effectuer un essai
-fonctionnel autorisé avec une adresse contrôlée et vérifier les liens publics.
+Redémarrer le site. Après les validations et l'autorisation de cet essai, effectuer
+un envoi fonctionnel vers une adresse contrôlée, vérifier les liens publics puis
+surveiller les résultats du seul workflow GitHub. Aucun email réel n'a été envoyé
+par cette préparation et les notifications ne sont pas déclarées actives.
 
-Créer ensuite, dans **Avancé > Tâches planifiées**, les tâches proposées ci-dessous.
-Elles ne sont pas créées par le kit. Le champ d'environnement d'une tâche est
-distinct de celui du site : ces commandes chargent explicitement le fichier privé,
-qui doit exporter ses variables. Choisir le même utilisateur SSH et le répertoire
-de travail `/home/amelone/www/amelone`.
-
-Toutes les 15 minutes (`*/15 * * * *`) :
-
-```bash
-bash -c '. /home/amelone/private/amelone.env; exec /home/amelone/venv/amelone/bin/python /home/amelone/www/amelone/manage.py process_event_notifications --limit 100'
-```
-
-Tous les jours, par exemple à 03:17 (`17 3 * * *`) :
+Seul le nettoyage des sessions est proposé dans **Avancé > Tâches planifiées**
+d'Alwaysdata, tous les jours, par exemple à 03:17 (`17 3 * * *`). Cette tâche n'est
+pas créée par le kit. Choisir le même utilisateur SSH et le répertoire de travail
+`/home/amelone/www/amelone`. L'environnement des tâches est distinct de celui du
+site ; la commande charge explicitement le fichier privé exporté :
 
 ```bash
 bash -c '. /home/amelone/private/amelone.env; exec /home/amelone/venv/amelone/bin/python /home/amelone/www/amelone/manage.py clearsessions'
@@ -507,8 +576,9 @@ bash -c '. /home/amelone/private/amelone.env; exec /home/amelone/venv/amelone/bi
 Confirmer le fuseau horaire affiché dans le panneau avant de choisir l'horaire
 quotidien. Les [tâches planifiées Alwaysdata](https://help.alwaysdata.com/en/docs/web-hosting/tasks/)
 ignorent une occurrence si la précédente tourne encore ; leurs logs sont dans
-`/home/amelone/admin/logs/jobs/`. Surveiller les premiers résultats, les erreurs
-Brevo et l'épuisement des lots de 100 ; ajuster ensuite selon les volumes constatés.
+`/home/amelone/admin/logs/jobs/`. Surveiller ce nettoyage dans Alwaysdata et les
+compteurs de notifications dans GitHub Actions ; ne pas activer un second
+planificateur pour accélérer la file.
 
 ## 10. Sauvegardes et retour arrière
 
@@ -592,5 +662,36 @@ Restauration terminée : 32 tables publiques, 31 migrations Django. Envois désa
 ```
 
 Ce contrôle atteste la réussite de la commande et ses compteurs finaux. Il ne
-remplace pas encore la comparaison détaillée des données, `migrate --check`, la
-réponse HTTPS de `/sante/`, les tests de connexion et les parcours métier.
+remplace pas la comparaison détaillée des données, `migrate --check` ni les
+parcours métier.
+
+### Mise en ligne confirmée le 14 novembre
+
+La réponse JSON fournie par l'utilisateur pour `/sante/` sur Alwaysdata est :
+
+```json
+{"status": "ok", "database": "ok"}
+```
+
+L'utilisateur confirme aussi la connexion du propriétaire et l'accès aux
+événements. Ces constats s'ajoutent aux **32 tables et 31 migrations enregistrées**
+après restauration. Ils attestent ces accès précis, sans prouver le contrôle
+`migrate --check`, tous les parcours d'inscription, les affectations, les repas,
+les paiements, les droits ni les envois Brevo. Les contrôles du fournisseur et de
+la file de notifications restent à effectuer, avec les envois à 0.
+
+### Derniers contrôles techniques et préparation Brevo
+
+La première tentative de `migrate --check` dans le terminal n'a pas chargé
+`amelone.env` : un marqueur `^[[200~` a fait échouer la commande de chargement.
+La vérification a donc essayé le PostgreSQL local par défaut (`127.0.0.1`) et
+retourné 1. Ce résultat ne prouve pas un problème du schéma cible ; recommencer
+après avoir tapé manuellement `source ~/private/amelone.env`.
+
+Le helper Brevo ajoute neuf tests sur la conservation des secrets existants, les
+permissions et écritures atomiques, les erreurs sans divulgation et l'absence
+d'envoi ou d'activation automatique des campagnes. Les **60 tests du kit** passent.
+Les **53 tests** ciblés de notifications/OIDC et de diagnostics Brevo passent
+également, ainsi que Ruff et la compilation du Python embarqué dans le workflow.
+Le contrôle réel du schéma et de Brevo reste à
+obtenir depuis Alwaysdata.
