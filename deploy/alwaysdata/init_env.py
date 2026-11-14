@@ -148,6 +148,7 @@ def main(argv=None):
             else:
                 connection = getpass.getpass("Connexion PostgreSQL cible (saisie masquée) : ")
         if args.check_db:
+            print("Vérification de la base Alwaysdata en cours ; patienter sans rien recoller.")
             check_target_database(args.db_host, args.db_name, args.db_user, password)
         destination = create_environment(args.host, args.output, connection)
     except TargetCheckError as error:

@@ -12,8 +12,16 @@ la source disponible, PostgreSQL **18.6**, taille **12 Mo**, avec une échéance
 avant de poursuivre le réglage de la cible. La sortie du terminal confirme ensuite
 un export créé le **13 novembre à 14 h 43, heure de Paris**, sous
 `/home/amelone/private/backups/`, avec son fichier SHA-256 et une table des matières
-lisible. La restauration complète n'est pas encore confirmée. Le panneau cible
-communiqué par l'utilisateur indique toujours PostgreSQL **17**.
+lisible. La restauration complète n'est pas encore confirmée.
+
+**Contrôle du 14 novembre vers 10 h 20, heure de Paris :** Render répond
+`status=suspended`, `suspended=suspended`, `suspenders=[billing]`. Aucun export
+plus récent n'a été obtenu ; aucun paiement ni
+changement d'offre n'a été effectué. Les éventuelles modifications entre l'export
+du 13 novembre à 14 h 43 et l'arrêt de la source ne sont pas garanties dans la
+copie disponible. La capture Alwaysdata confirme une migration native réussie le
+14 novembre à 10 h 17 ; la version 18 et la base vide seront reconfirmées par
+`init_env.py --check-db` avant création du fichier privé.
 
 La [documentation Render Free](https://render.com/docs/free#30-day-limit) précise
 qu'après expiration la base devient inaccessible, avec un délai de grâce de
@@ -309,6 +317,27 @@ Le logo AMELONE actuel est conservé en base.
 
 ## 5. Répéter l'export et la restauration
 
+Pour l'archive déjà confirmée chez Alwaysdata, après configuration privée et
+installation, lancer le helper de restauration :
+
+```bash
+PYTHON_VERSION=3.12 python deploy/alwaysdata/restore_backup.py --dump /home/amelone/private/backups/render-20261113T134336Z-9669102d8a17.dump --env-file /home/amelone/private/amelone.env
+```
+
+Il lit le fichier privé sans afficher ni demander de nouveau mot de passe,
+impose la cible `postgresql-amelone.alwaysdata.net` / `amelone_prod` / `amelone`,
+vérifie le checksum SHA-256 et les permissions des fichiers, puis refuse une
+cible déjà remplie ou une version autre que 18. La restauration utilise une
+transaction unique, sans `--clean`, et conserve l'archive. Les quatre réglages
+d'envoi doivent rester à 0. La sortie se limite aux compteurs de tables et de
+migrations ; poursuivre avec `manage.py migrate --check` et les parcours
+applicatifs. En cas d'erreur de vérification après l'import, examiner l'état
+présent au lieu de relancer ou vider la cible.
+
+La procédure manuelle suivante concerne une source encore accessible. Dans le cas
+constaté le 14 novembre, Render est suspendu : ne pas présenter un nouvel export
+comme effectué ni réactiver une offre payante sans instruction de l'utilisateur.
+
 Définir un emplacement privé neuf pour le dump. L'export lit la source ; il ne
 suspend pas les inscriptions et ne constitue donc pas encore l'export final.
 
@@ -539,3 +568,12 @@ terminal utilisateur confirme désormais l'export privé et son fichier SHA-256 
 aucun test de restauration complète n'est remplacé par la seule lecture de la
 table des matières de l'archive. La configuration cible et le site WSGI restent à
 vérifier réellement après passage de PostgreSQL en version 18.
+
+### Préparation de la restauration du 14 novembre
+
+Dix tests supplémentaires vérifient le helper de restauration : cible et SSL
+imposés, indicateurs d'envoi à 0, fichiers privés, checksum, refus d'une base
+remplie ou PostgreSQL 17, arguments transactionnels, absence de secret dans les
+sorties et nettoyage des identifiants temporaires. Les **51 tests** du kit,
+Ruff et `git diff --check` passent. Les programmes PostgreSQL restent simulés dans
+ces tests ; aucun import réel n'est encore attesté par un résultat utilisateur.
